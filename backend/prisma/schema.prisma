@@ -1,0 +1,35 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  nome      String
+  email     String   @unique
+  senha     String
+  role      String   @default("caixa")
+  caixas    Caixa[]
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("usuarios")
+}
+
+model Caixa {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  valorInicial   Float
+  dataAbertura   DateTime @default(now())
+  dataFechamento DateTime?
+  saldoFinal     Float?
+  status         String   @default("aberto") // aberto, fechado
+  usuarioId      String   @db.ObjectId
+  usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now()) @map("created_at")
+  
+  @@map("caixas")
+}
