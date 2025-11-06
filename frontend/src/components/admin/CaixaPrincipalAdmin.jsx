@@ -62,7 +62,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
   const finalizarVenda = () => {
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
-      return alert("Valor insuficiente!");
+      return;
     }
 
     const vendaId = Math.floor(1000 + Math.random() * 9000);
@@ -93,16 +93,13 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     localStorage.setItem('produtos', JSON.stringify(produtos));
 
     setHistoricoVendas(prev => [novaVenda, ...prev]);
-    
-    alert(`Venda #${vendaId} concluída \nTotal: R$ ${total.toFixed(2)}\n${metodoPagamento === "dinheiro" ? `Troco: R$ ${troco}` : `Pagamento via ${metodoPagamento.toUpperCase()}`}`);
-    
+        
     setCarrinho([]);
     setValorRecebido("");
   };
 
   const handleFecharCaixa = async () => {
     if (!saldoFinal || isNaN(saldoFinal) || parseFloat(saldoFinal) < 0) {
-      alert('Por favor, informe um saldo final válido.');
       return;
     }
 
@@ -126,7 +123,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         throw new Error(errorText || 'Erro ao fechar caixa');
       }
 
-      alert(`Caixa fechado com sucesso!\nSaldo final: R$ ${parseFloat(saldoFinal).toFixed(2)}`);
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
       
@@ -137,7 +133,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
     } catch (error) {
       console.error('Erro ao fechar caixa:', error);
-      alert('❌ Erro ao fechar caixa: ' + error.message);
     } finally {
       setIsFechandoCaixa(false);
     }

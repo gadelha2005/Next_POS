@@ -32,7 +32,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const adicionarCarrinho = (produto) => {
     // Verificar se há estoque disponível
     if (produto.estoque <= 0) {
-      alert('Produto sem estoque disponível!');
       return;
     }
 
@@ -41,7 +40,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
       if (existe) {
         // Verificar se não excede o estoque
         if (existe.qtd + 1 > produto.estoque) {
-          alert('Quantidade solicitada excede o estoque disponível!');
           return prev;
         }
         return prev.map(item =>
@@ -63,7 +61,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     // Verificar estoque
     const produto = produtos.find(p => p.id === id);
     if (produto && novaQuantidade > produto.estoque) {
-      alert('Quantidade solicitada excede o estoque disponível!');
       return;
     }
 
@@ -119,15 +116,12 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     // Atualizar histórico local
     setHistoricoVendas(prev => [novaVenda, ...prev.slice(0, 4)]);
     
-    alert(`Venda #${vendaId} concluída ✅\nTotal: R$ ${total.toFixed(2)}\n${metodoPagamento === "dinheiro" ? `Troco: R$ ${troco}` : `Pagamento via ${metodoPagamento.toUpperCase()}`}`);
-    
     setCarrinho([]);
     setValorRecebido("");
   };
 
   const handleFecharCaixa = async () => {
     if (!saldoFinal || isNaN(saldoFinal) || parseFloat(saldoFinal) < 0) {
-      alert('Por favor, informe um saldo final válido.');
       return;
     }
 
@@ -150,8 +144,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
         const errorText = await response.text();
         throw new Error(errorText || 'Erro ao fechar caixa');
       }
-     
-      alert(`✅ Caixa fechado com sucesso!\nSaldo final: R$ ${parseFloat(saldoFinal).toFixed(2)}`);
+  
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
       
@@ -162,7 +155,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
 
     } catch (error) {
       console.error('Erro ao fechar caixa:', error);
-      alert('❌ Erro ao fechar caixa: ' + error.message);
     } finally {
       setIsFechandoCaixa(false);
     }

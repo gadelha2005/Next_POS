@@ -6,7 +6,6 @@ function AberturaCaixa({ user, onAberturaSuccess, onLogout }) {
 
     const handleAbrirCaixa = async () => {
         if (!valorInicial || isNaN(valorInicial) || parseFloat(valorInicial) <= 0) {
-            alert('Por favor, informe um valor inicial válido.');
             return;
         }
         
@@ -38,17 +37,11 @@ function AberturaCaixa({ user, onAberturaSuccess, onLogout }) {
                 throw new Error(errorText || 'Erro ao abrir caixa');
             }
 
-            const data = await response.json();
-            console.log('✅ Success response:', data);
-
-            alert(`Caixa aberto com sucesso! Valor inicial: R$ ${parseFloat(valorInicial).toFixed(2)}`);
-            
             // Chamar callback de sucesso
             onAberturaSuccess();
 
         } catch (error) {
             console.error('Erro completo:', error);
-            alert('Erro ao abrir caixa: ' + error.message);
         } finally {
             setIsLoading(false);
         }

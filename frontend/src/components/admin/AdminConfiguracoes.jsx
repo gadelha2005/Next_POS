@@ -19,7 +19,6 @@ export default function AdminConfiguracoes() {
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("Dados salvos:", formData);
-    alert("Alterações salvas com sucesso!");
   };
 
   return (
