@@ -3,7 +3,7 @@ import { prisma } from '../config/prisma';
 
 async function initDatabase() {
   try {
-    console.log('🔄 Inicializando banco de dados...');
+    console.log('Inicializando banco de dados...');
 
     // Testar conexão
     await prisma.$connect();
