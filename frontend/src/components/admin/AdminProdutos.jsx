@@ -1,31 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, Plus, X } from "lucide-react";
+import { Edit, Trash2, Plus, X, AlertTriangle } from "lucide-react";
+import produtoService from '../../service/produtoService';
 
 export default function AdminProdutos() {
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
     nome: '',
-    codigo: '',
     categoria: '',
     preco: '',
     estoque: ''
   });
 
-  // Carregar produtos do localStorage
+  // Carregar produtos da API
   useEffect(() => {
     carregarProdutos();
   }, []);
 
-  const carregarProdutos = () => {
-    const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    setProducts(produtosSalvos);
-  };
-
-  const salvarProdutos = (novosProdutos) => {
-    localStorage.setItem('produtos', JSON.stringify(novosProdutos));
-    setProducts(novosProdutos);
+  const carregarProdutos = async () => {
+    try {
+      setLoading(true);
+      const response = await produtoService.listarProdutos();
+      setProducts(response.produtos || []);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      // Fallback para localStorage em caso de erro
+      const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      setProducts(produtosSalvos);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -39,7 +47,6 @@ export default function AdminProdutos() {
   const abrirModalNovo = () => {
     setFormData({
       nome: '',
-      codigo: '',
       categoria: '',
       preco: '',
       estoque: ''
@@ -51,7 +58,6 @@ export default function AdminProdutos() {
   const abrirModalEditar = (product) => {
     setFormData({
       nome: product.nome,
-      codigo: product.codigo,
       categoria: product.categoria,
       preco: product.preco.toString(),
       estoque: product.estoque.toString()
@@ -65,37 +71,55 @@ export default function AdminProdutos() {
     setEditingProduct(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const novoProduto = {
-      id: editingProduct ? editingProduct.id : Date.now(),
-      nome: formData.nome,
-      codigo: formData.codigo,
-      categoria: formData.categoria,
-      preco: parseFloat(formData.preco),
-      estoque: parseInt(formData.estoque)
-    };
+    try {
+      const produtoData = {
+        nome: formData.nome,
+        categoria: formData.categoria,
+        preco: parseFloat(formData.preco),
+        estoque: parseInt(formData.estoque)
+      };
 
-    let novosProdutos;
-    if (editingProduct) {
-      // Editar produto existente
-      novosProdutos = products.map(p => 
-        p.id === editingProduct.id ? novoProduto : p
-      );
-    } else {
-      // Adicionar novo produto
-      novosProdutos = [...products, novoProduto];
+      if (editingProduct) {
+        await produtoService.atualizarProduto(editingProduct.id, produtoData);
+      } else {
+        await produtoService.criarProduto(produtoData);
+      }
+
+      await carregarProdutos();
+      fecharModal();
+    } catch (error) {
+      console.error('Erro ao salvar produto:', error);
+      alert('Erro ao salvar produto: ' + error.message);
     }
-
-    salvarProdutos(novosProdutos);
-    fecharModal();
   };
 
-  const handleDelete = (productId) => {
-    if (window.confirm('Tem certeza que deseja excluir este produto?')) {
-      const novosProdutos = products.filter(p => p.id !== productId);
-      salvarProdutos(novosProdutos);
+  // Abrir modal de confirmação para excluir
+  const confirmDelete = (product) => {
+    setProductToDelete(product);
+    setShowDeleteModal(true);
+  };
+
+  // Fechar modal de confirmação
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setProductToDelete(null);
+  };
+
+  // Executar exclusão após confirmação
+  const executeDelete = async () => {
+    if (!productToDelete) return;
+
+    try {
+      await produtoService.desativarProduto(productToDelete.id);
+      await carregarProdutos();
+      closeDeleteModal();
+    } catch (error) {
+      console.error('Erro ao excluir produto:', error);
+      alert('Erro ao excluir produto: ' + error.message);
+      closeDeleteModal();
     }
   };
 
@@ -122,7 +146,7 @@ export default function AdminProdutos() {
             <Edit size={16} />
           </button>
           <button 
-            onClick={() => handleDelete(product.id)}
+            onClick={() => confirmDelete(product)}
             className="bg-red-500 text-white p-2 rounded hover:bg-red-600 transition"
           >
             <Trash2 size={16} />
@@ -131,6 +155,16 @@ export default function AdminProdutos() {
       </tr>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -204,18 +238,6 @@ export default function AdminProdutos() {
               </div>
               
               <div>
-                <label className="block text-sm font-medium mb-1">Código</label>
-                <input
-                  type="text"
-                  name="codigo"
-                  value={formData.codigo}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg p-2"
-                  required
-                />
-              </div>
-              
-              <div>
                 <label className="block text-sm font-medium mb-1">Categoria</label>
                 <input
                   type="text"
@@ -270,6 +292,44 @@ export default function AdminProdutos() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação para Excluir */}
+      {showDeleteModal && productToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex flex-col items-center p-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertTriangle className="text-red-600" size={32} />
+              </div>
+              
+              <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">
+                Excluir Produto
+              </h3>
+              
+              <p className="text-gray-600 text-center mb-6">
+                Tem certeza que deseja excluir o produto <strong>"{productToDelete.nome}"</strong>? 
+                Esta ação não pode ser desfeita.
+              </p>
+              
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={closeDeleteModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executeDelete}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={18} />
+                  Excluir
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

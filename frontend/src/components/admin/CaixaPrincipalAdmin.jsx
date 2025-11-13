@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
+import produtoService from '../../service/produtoService';
 
 function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
-  const produtosExemplo = [
-    { id: 1, nome: "Coca-Cola 2L", preco: 8.99, estoque: 50, codigo: "43242", img: "" },
-    { id: 2, nome: "Arroz 5kg", preco: 10.0, estoque: 100, codigo: "12433", img: "" },
-    { id: 3, nome: "Feijão 1kg", preco: 7.55, estoque: 25, codigo: "53422", img: "" },
-    { id: 4, nome: "Sabão em Pó", preco: 12.90, estoque: 30, codigo: "64533", img: "" },
-    { id: 5, nome: "Óleo de Soja", preco: 6.49, estoque: 40, codigo: "75644", img: "" },
-    { id: 6, nome: "Café 500g", preco: 15.90, estoque: 20, codigo: "86755", img: "" },
-  ];
-
+  const [produtos, setProdutos] = useState([]);
   const [busca, setBusca] = useState("");
   const [carrinho, setCarrinho] = useState([]);
   const [valorRecebido, setValorRecebido] = useState("");
@@ -20,15 +13,53 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [saldoFinal, setSaldoFinal] = useState('');
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const produtosFiltrados = produtosExemplo.filter(p =>
-    p.nome.toLowerCase().includes(busca.toLowerCase()) || p.codigo.includes(busca)
+  // Carregar produtos da API e vendas do localStorage
+  useEffect(() => {
+    carregarProdutos();
+    carregarVendasRecentes();
+  }, []);
+
+  const carregarProdutos = async () => {
+    try {
+      setLoading(true);
+      const response = await produtoService.listarProdutos();
+      setProdutos(response.produtos || []);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      // Fallback para localStorage em caso de erro
+      const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      setProdutos(produtosSalvos);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarVendasRecentes = () => {
+    // Carregar histórico de vendas do localStorage
+    const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
+    setHistoricoVendas(vendasSalvas.slice(0, 5)); // Últimas 5 vendas
+  };
+
+  const produtosFiltrados = produtos.filter(p =>
+    p.nome.toLowerCase().includes(busca.toLowerCase()) || 
+    p.codigo.includes(busca)
   );
 
   const adicionarCarrinho = (produto) => {
+    // Verificar se há estoque disponível
+    if (produto.estoque <= 0) {
+      return;
+    }
+
     setCarrinho(prev => {
       const existe = prev.find(item => item.id === produto.id);
       if (existe) {
+        // Verificar se não excede o estoque
+        if (existe.qtd + 1 > produto.estoque) {
+          return prev;
+        }
         return prev.map(item =>
           item.id === produto.id ? { ...item, qtd: item.qtd + 1 } : item
         );
@@ -44,6 +75,13 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       removerItem(id);
       return;
     }
+
+    // Verificar estoque
+    const produto = produtos.find(p => p.id === id);
+    if (produto && novaQuantidade > produto.estoque) {
+      return;
+    }
+
     setCarrinho(prev => 
       prev.map(item => 
         item.id === id ? { ...item, qtd: novaQuantidade } : item
@@ -60,8 +98,9 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       ? (Number(valorRecebido) - total).toFixed(2)
       : 0;
 
-  const finalizarVenda = () => {
+  const finalizarVenda = async () => {
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
+      alert("Valor recebido insuficiente!");
       return;
     }
 
@@ -77,23 +116,34 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       operador: user.nome
     };
 
-    // Salvar venda no localStorage
+    // Salvar venda no localStorage (não temos API para vendas ainda)
     const vendasExistentes = JSON.parse(localStorage.getItem('vendas') || '[]');
     const novasVendas = [novaVenda, ...vendasExistentes];
     localStorage.setItem('vendas', JSON.stringify(novasVendas));
 
-    // Atualizar estoque dos produtos
-    const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    carrinho.forEach(itemCarrinho => {
-      const produtoIndex = produtos.findIndex(p => p.id === itemCarrinho.id);
-      if (produtoIndex !== -1) {
-        produtos[produtoIndex].estoque -= itemCarrinho.qtd;
+    // Atualizar estoque dos produtos na API
+    try {
+      for (const itemCarrinho of carrinho) {
+        const produto = produtos.find(p => p.id === itemCarrinho.id);
+        if (produto) {
+          const novoEstoque = produto.estoque - itemCarrinho.qtd;
+          await produtoService.atualizarProduto(produto.id, {
+            ...produto,
+            estoque: novoEstoque
+          });
+        }
       }
-    });
-    localStorage.setItem('produtos', JSON.stringify(produtos));
+      
+      // Recarregar produtos para atualizar estoque na interface
+      await carregarProdutos();
+    } catch (error) {
+      console.error('Erro ao atualizar estoque:', error);
+      alert('Venda registrada, mas houve erro ao atualizar estoque na API');
+    }
 
-    setHistoricoVendas(prev => [novaVenda, ...prev]);
-        
+    // Atualizar histórico local
+    setHistoricoVendas(prev => [novaVenda, ...prev.slice(0, 4)]);
+    
     setCarrinho([]);
     setValorRecebido("");
   };
@@ -122,7 +172,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         const errorText = await response.text();
         throw new Error(errorText || 'Erro ao fechar caixa');
       }
-
+    
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
       
@@ -206,6 +256,14 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       <path d="M18 6L6 18M6 6l12 12"/>
     </svg>
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 p-6 text-black">
