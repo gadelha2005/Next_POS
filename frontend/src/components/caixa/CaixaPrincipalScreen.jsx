@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
+import produtoService from '../../service/produtoService';
 
 function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const [produtos, setProdutos] = useState([]);
@@ -13,16 +14,44 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [saldoFinal, setSaldoFinal] = useState('');
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [caixaAberto ,setCaixaAberto] = useState(true);
 
-  // Carregar produtos do localStorage
-  React.useEffect(() => {
-    const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    setProdutos(produtosSalvos);
-    
-    // Carregar histórico de vendas do localStorage
-    const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
-    setHistoricoVendas(vendasSalvas.slice(0, 5)); // Últimas 5 vendas
+  // Carregar produtos da API e vendas do localStorage
+  useEffect(() => {
+    carregarProdutos();
+    carregarVendasRecentes();
+    verificarCaixaAberto();
   }, []);
+
+  const verificarCaixaAberto = () => {
+    const caixaStatus = localStorage.getItem('caixaAberto');
+    if (caixaStatus === 'false') {
+      setCaixaAberto(false);
+    } else {
+      setCaixaAberto(true);
+      localStorage.setItem('caixaAberto', 'true');
+    }
+  };
+
+  const carregarProdutos = async () => {
+    try {
+      setLoading(true);
+      const response = await produtoService.listarProdutos();
+      setProdutos(response.produtos || []);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      setProdutos(produtosSalvos);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarVendasRecentes = () => {
+    const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
+    setHistoricoVendas(vendasSalvas.slice(0, 5));
+  };
 
   const produtosFiltrados = produtos.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) || 
@@ -30,7 +59,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   );
 
   const adicionarCarrinho = (produto) => {
-    // Verificar se há estoque disponível
     if (produto.estoque <= 0) {
       return;
     }
@@ -38,7 +66,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     setCarrinho(prev => {
       const existe = prev.find(item => item.id === produto.id);
       if (existe) {
-        // Verificar se não excede o estoque
         if (existe.qtd + 1 > produto.estoque) {
           return prev;
         }
@@ -58,7 +85,6 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
       return;
     }
 
-    // Verificar estoque
     const produto = produtos.find(p => p.id === id);
     if (produto && novaQuantidade > produto.estoque) {
       return;
@@ -80,9 +106,10 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
       ? (Number(valorRecebido) - total).toFixed(2)
       : 0;
 
-  const finalizarVenda = () => {
+  const finalizarVenda = async () => {
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
-      return alert("Valor insuficiente!");
+      alert("Valor insuficiente!");
+      return;
     }
 
     const vendaId = Math.floor(1000 + Math.random() * 9000);
@@ -102,18 +129,25 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     const novasVendas = [novaVenda, ...vendasExistentes];
     localStorage.setItem('vendas', JSON.stringify(novasVendas));
 
-    // Atualizar estoque dos produtos
-    const produtosAtualizados = [...produtos];
-    carrinho.forEach(itemCarrinho => {
-      const produtoIndex = produtosAtualizados.findIndex(p => p.id === itemCarrinho.id);
-      if (produtoIndex !== -1) {
-        produtosAtualizados[produtoIndex].estoque -= itemCarrinho.qtd;
+    // Atualizar estoque dos produtos na API
+    try {
+      for (const itemCarrinho of carrinho) {
+        const produto = produtos.find(p => p.id === itemCarrinho.id);
+        if (produto) {
+          const novoEstoque = produto.estoque - itemCarrinho.qtd;
+          await produtoService.atualizarProduto(produto.id, {
+            ...produto,
+            estoque: novoEstoque
+          });
+        }
       }
-    });
-    localStorage.setItem('produtos', JSON.stringify(produtosAtualizados));
-    setProdutos(produtosAtualizados);
+      
+      await carregarProdutos();
+    } catch (error) {
+      console.error('Erro ao atualizar estoque:', error);
+      alert('Venda registrada, mas houve erro ao atualizar estoque na API');
+    }
 
-    // Atualizar histórico local
     setHistoricoVendas(prev => [novaVenda, ...prev.slice(0, 4)]);
     
     setCarrinho([]);
@@ -122,6 +156,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
 
   const handleFecharCaixa = async () => {
     if (!saldoFinal || isNaN(saldoFinal) || parseFloat(saldoFinal) < 0) {
+      alert('Por favor, informe um saldo final válido');
       return;
     }
 
@@ -129,34 +164,95 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
 
     try {
       const token = localStorage.getItem('token');
+      
+      // CORREÇÃO: Usar "valorFinal" ao invés de "saldoFinal"
+      const requestBody = {
+        valorFinal: parseFloat(saldoFinal)
+      };
+
       const response = await fetch('http://localhost:3333/api/caixa/fechar', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          saldoFinal: parseFloat(saldoFinal)
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Erro ao fechar caixa');
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || 'Erro ao fechar caixa';
+        
+        // Se não há caixa aberto, fechar localmente
+        if (errorMessage.includes('Nenhum caixa aberto encontrado')) {
+          console.warn('Nenhum caixa aberto encontrado no backend. Fechando localmente.');
+          fecharCaixaLocalmente();
+          return;
+        }
+        throw new Error(JSON.stringify(errorData) || errorMessage);
       }
-  
+
+      // Sucesso no backend
+      localStorage.setItem('caixaAberto', 'false');
+      setCaixaAberto(false);
+      
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
       
-      // Chama o callback para voltar ao login/dashboard
+      alert('Caixa fechado com sucesso!');
+      
       if (onFecharCaixa) {
         onFecharCaixa();
       }
 
     } catch (error) {
       console.error('Erro ao fechar caixa:', error);
+      
+      // Fallback: fechar caixa localmente
+      if (error.message.includes('Nenhum caixa aberto encontrado') || error.message.includes('Failed to fetch')) {
+        fecharCaixaLocalmente();
+      } else {
+        // Mostrar erro específico da API
+        try {
+          const errorObj = JSON.parse(error.message);
+          alert('Erro ao fechar caixa: ' + errorObj.error);
+        } catch {
+          alert('Erro ao fechar caixa: ' + error.message);
+        }
+      }
     } finally {
       setIsFechandoCaixa(false);
+    }
+  };
+
+  const fecharCaixaLocalmente = () => {
+    localStorage.setItem('caixaAberto', 'false');
+    setCaixaAberto(false);
+    
+    // Calcular totais das vendas do dia
+    const vendasDoDia = JSON.parse(localStorage.getItem('vendas') || '[]');
+    const totalVendas = vendasDoDia.reduce((acc, venda) => acc + venda.total, 0);
+    
+    // Salvar relatório do caixa
+    const relatorioCaixa = {
+      data: new Date().toLocaleString('pt-BR'),
+      saldoFinal: parseFloat(saldoFinal),
+      totalVendas: totalVendas,
+      operador: user.nome,
+      vendasCount: vendasDoDia.length,
+      fechamentoLocal: true
+    };
+    
+    const relatoriosExistentes = JSON.parse(localStorage.getItem('relatoriosCaixa') || '[]');
+    localStorage.setItem('relatoriosCaixa', JSON.stringify([relatorioCaixa, ...relatoriosExistentes]));
+    
+    setShowFecharCaixaModal(false);
+    setSaldoFinal('');
+    
+    alert('Caixa fechado localmente! Total de vendas: R$ ' + totalVendas.toFixed(2));
+    
+    if (onFecharCaixa) {
+      onFecharCaixa();
     }
   };
 
@@ -170,7 +266,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     setVendaSelecionada(null);
   };
 
-  // Ícones SVG inline
+  // Ícones SVG inline (mantenha os mesmos ícones)
   const SearchIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <circle cx="11" cy="11" r="8"/>
@@ -237,6 +333,14 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     </svg>
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 p-6 text-black">
       {/* Cabeçalho */}
@@ -250,7 +354,9 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
           <div>
             <h1 className="text-2xl font-bold">NextPOS</h1>
             <p className="text-sm text-gray-600">Operador: {user.nome}</p>
-            <p className="text-sm text-gray-600">Caixa aberto — Troco: R$ 500,00</p>
+            <p className="text-sm text-gray-600">
+              {caixaAberto ? 'Caixa aberto — Troco: R$ 500,00' : 'Caixa fechado'}
+            </p>
           </div>
         </div>
 

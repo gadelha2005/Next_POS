@@ -1,16 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
+import produtoService from '../../service/produtoService';
 
 function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
-  const produtosExemplo = [
-    { id: 1, nome: "Coca-Cola 2L", preco: 8.99, estoque: 50, codigo: "43242", img: "" },
-    { id: 2, nome: "Arroz 5kg", preco: 10.0, estoque: 100, codigo: "12433", img: "" },
-    { id: 3, nome: "Feijão 1kg", preco: 7.55, estoque: 25, codigo: "53422", img: "" },
-    { id: 4, nome: "Sabão em Pó", preco: 12.90, estoque: 30, codigo: "64533", img: "" },
-    { id: 5, nome: "Óleo de Soja", preco: 6.49, estoque: 40, codigo: "75644", img: "" },
-    { id: 6, nome: "Café 500g", preco: 15.90, estoque: 20, codigo: "86755", img: "" },
-  ];
-
+  const [produtos, setProdutos] = useState([]);
   const [busca, setBusca] = useState("");
   const [carrinho, setCarrinho] = useState([]);
   const [valorRecebido, setValorRecebido] = useState("");
@@ -20,15 +13,61 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const [showFecharCaixaModal, setShowFecharCaixaModal] = useState(false);
   const [saldoFinal, setSaldoFinal] = useState('');
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [caixaAberto, setCaixaAberto] = useState(true);
 
-  const produtosFiltrados = produtosExemplo.filter(p =>
-    p.nome.toLowerCase().includes(busca.toLowerCase()) || p.codigo.includes(busca)
+  // Carregar produtos da API e vendas do localStorage
+  useEffect(() => {
+    carregarProdutos();
+    carregarVendasRecentes();
+    verificarCaixaAberto();
+  }, []);
+
+  const verificarCaixaAberto = () => {
+    const caixaStatus = localStorage.getItem('caixaAberto');
+    if (caixaStatus === 'false') {
+      setCaixaAberto(false);
+    } else {
+      setCaixaAberto(true);
+      localStorage.setItem('caixaAberto', 'true');
+    }
+  };
+
+  const carregarProdutos = async () => {
+    try {
+      setLoading(true);
+      const response = await produtoService.listarProdutos();
+      setProdutos(response.produtos || []);
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error);
+      const produtosSalvos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      setProdutos(produtosSalvos);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarVendasRecentes = () => {
+    const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
+    setHistoricoVendas(vendasSalvas.slice(0, 5));
+  };
+
+  const produtosFiltrados = produtos.filter(p =>
+    p.nome.toLowerCase().includes(busca.toLowerCase()) || 
+    p.codigo.includes(busca)
   );
 
   const adicionarCarrinho = (produto) => {
+    if (produto.estoque <= 0) {
+      return;
+    }
+
     setCarrinho(prev => {
       const existe = prev.find(item => item.id === produto.id);
       if (existe) {
+        if (existe.qtd + 1 > produto.estoque) {
+          return prev;
+        }
         return prev.map(item =>
           item.id === produto.id ? { ...item, qtd: item.qtd + 1 } : item
         );
@@ -44,6 +83,12 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       removerItem(id);
       return;
     }
+
+    const produto = produtos.find(p => p.id === id);
+    if (produto && novaQuantidade > produto.estoque) {
+      return;
+    }
+
     setCarrinho(prev => 
       prev.map(item => 
         item.id === id ? { ...item, qtd: novaQuantidade } : item
@@ -60,8 +105,9 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       ? (Number(valorRecebido) - total).toFixed(2)
       : 0;
 
-  const finalizarVenda = () => {
+  const finalizarVenda = async () => {
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
+      alert("Valor recebido insuficiente!");
       return;
     }
 
@@ -82,24 +128,34 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     const novasVendas = [novaVenda, ...vendasExistentes];
     localStorage.setItem('vendas', JSON.stringify(novasVendas));
 
-    // Atualizar estoque dos produtos
-    const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    carrinho.forEach(itemCarrinho => {
-      const produtoIndex = produtos.findIndex(p => p.id === itemCarrinho.id);
-      if (produtoIndex !== -1) {
-        produtos[produtoIndex].estoque -= itemCarrinho.qtd;
+    // Atualizar estoque dos produtos na API
+    try {
+      for (const itemCarrinho of carrinho) {
+        const produto = produtos.find(p => p.id === itemCarrinho.id);
+        if (produto) {
+          const novoEstoque = produto.estoque - itemCarrinho.qtd;
+          await produtoService.atualizarProduto(produto.id, {
+            ...produto,
+            estoque: novoEstoque
+          });
+        }
       }
-    });
-    localStorage.setItem('produtos', JSON.stringify(produtos));
+      
+      await carregarProdutos();
+    } catch (error) {
+      console.error('Erro ao atualizar estoque:', error);
+      alert('Venda registrada, mas houve erro ao atualizar estoque na API');
+    }
 
-    setHistoricoVendas(prev => [novaVenda, ...prev]);
-        
+    setHistoricoVendas(prev => [novaVenda, ...prev.slice(0, 4)]);
+    
     setCarrinho([]);
     setValorRecebido("");
   };
 
   const handleFecharCaixa = async () => {
     if (!saldoFinal || isNaN(saldoFinal) || parseFloat(saldoFinal) < 0) {
+      alert('Por favor, informe um saldo final válido');
       return;
     }
 
@@ -107,6 +163,8 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
     try {
       const token = localStorage.getItem('token');
+      
+      // Tentar fechar caixa no backend
       const response = await fetch('http://localhost:3333/api/caixa/fechar', {
         method: 'POST',
         headers: {
@@ -119,23 +177,108 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Erro ao fechar caixa');
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.error || 'Erro ao fechar caixa';
+        
+        // Se não há caixa aberto, fechar localmente
+        if (errorMessage.includes('Nenhum caixa aberto encontrado')) {
+          console.warn('Nenhum caixa aberto encontrado no backend. Fechando localmente.');
+          fecharCaixaLocalmente();
+          return;
+        }
+        throw new Error(errorMessage);
       }
 
+      // Sucesso no backend
+      localStorage.setItem('caixaAberto', 'false');
+      setCaixaAberto(false);
+      
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
       
-      // Chama o callback para voltar ao dashboard
+      alert('Caixa fechado com sucesso no sistema!');
+      
       if (onFecharCaixa) {
         onFecharCaixa();
       }
 
     } catch (error) {
       console.error('Erro ao fechar caixa:', error);
+      
+      // Fallback: fechar caixa localmente
+      if (error.message.includes('Nenhum caixa aberto encontrado') || error.message.includes('Failed to fetch')) {
+        fecharCaixaLocalmente();
+      } else {
+        alert('Erro ao fechar caixa: ' + error.message);
+      }
     } finally {
       setIsFechandoCaixa(false);
     }
+  };
+
+  const fecharCaixaLocalmente = () => {
+    localStorage.setItem('caixaAberto', 'false');
+    setCaixaAberto(false);
+    
+    // Calcular totais das vendas do dia
+    const vendasDoDia = JSON.parse(localStorage.getItem('vendas') || '[]');
+    const totalVendas = vendasDoDia.reduce((acc, venda) => acc + venda.total, 0);
+    
+    // Salvar relatório do caixa
+    const relatorioCaixa = {
+      data: new Date().toLocaleString('pt-BR'),
+      saldoFinal: parseFloat(saldoFinal),
+      totalVendas: totalVendas,
+      operador: user.nome,
+      vendasCount: vendasDoDia.length,
+      fechamentoLocal: true
+    };
+    
+    const relatoriosExistentes = JSON.parse(localStorage.getItem('relatoriosCaixa') || '[]');
+    localStorage.setItem('relatoriosCaixa', JSON.stringify([relatorioCaixa, ...relatoriosExistentes]));
+    
+    setShowFecharCaixaModal(false);
+    setSaldoFinal('');
+    
+    alert('Caixa fechado localmente! Total de vendas: R$ ' + totalVendas.toFixed(2));
+    
+    if (onFecharCaixa) {
+      onFecharCaixa();
+    }
+  };
+
+  const abrirCaixa = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3333/api/caixa/abrir', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          saldoInicial: 500.00
+        })
+      });
+
+      if (response.ok) {
+        localStorage.setItem('caixaAberto', 'true');
+        setCaixaAberto(true);
+        alert('Caixa aberto com sucesso no sistema!');
+      } else {
+        // Se der erro no backend, abrir localmente
+        abrirCaixaLocalmente();
+      }
+    } catch (error) {
+      console.error('Erro ao abrir caixa:', error);
+      abrirCaixaLocalmente();
+    }
+  };
+
+  const abrirCaixaLocalmente = () => {
+    localStorage.setItem('caixaAberto', 'true');
+    setCaixaAberto(true);
+    alert('Caixa aberto localmente!');
   };
 
   const precisaValorRecebido = metodoPagamento === "dinheiro";
@@ -207,9 +350,17 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     </svg>
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-100 p-6 text-black">
-      {/* Cabeçalho - SEM botão Sair */}
+      {/* Cabeçalho */}
       <div className="flex justify-between items-center pb-4">
         <div className="flex items-center gap-3">
           <img 
@@ -220,7 +371,9 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
           <div>
             <h1 className="text-2xl font-bold">NextPOS</h1>
             <p className="text-sm text-gray-600">Administrador: {user.nome}</p>
-            <p className="text-sm text-gray-600">Caixa aberto — Troco: R$ 500,00</p>
+            <p className="text-sm text-gray-600">
+              {caixaAberto ? 'Caixa aberto — Troco: R$ 500,00' : 'Caixa fechado'}
+            </p>
           </div>
         </div>
 
@@ -233,17 +386,26 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
           )}
           
           {/* Botão Finalizar Caixa */}
-          <button 
-            onClick={() => setShowFecharCaixaModal(true)}
-            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition duration-200 flex items-center gap-2"
-          >
-            <CashRegisterIcon /> Finalizar Caixa
-          </button>
+          {caixaAberto ? (
+            <button 
+              onClick={() => setShowFecharCaixaModal(true)}
+              className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-medium transition duration-200 flex items-center gap-2"
+            >
+              <CashRegisterIcon /> Finalizar Caixa
+            </button>
+          ) : (
+            <button 
+              onClick={abrirCaixa}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition duration-200 flex items-center gap-2"
+            >
+              <CashRegisterIcon /> Abrir Caixa
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Conteúdo */}
-      <div className="flex gap-4 w-full flex-1">
+      {/* Conteúdo Principal */}
+      <div className={`flex gap-4 w-full flex-1 ${!caixaAberto ? 'opacity-50 pointer-events-none' : ''}`}>
         {/* Lista de produtos */}
         <div className="flex-1 bg-white p-4 rounded-lg shadow">
           <div className="flex items-center bg-gray-100 p-2 rounded mb-4">
@@ -262,7 +424,11 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
               <div
                 key={prod.id}
                 onClick={() => adicionarCarrinho(prod)}
-                className="border border-gray-300 p-4 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-500 transition duration-200"
+                className={`border p-4 rounded-lg cursor-pointer transition duration-200 ${
+                  prod.estoque <= 0 
+                    ? 'border-red-300 bg-red-50 opacity-60' 
+                    : 'border-gray-300 hover:bg-gray-50 hover:border-blue-500'
+                }`}
               >
                 <div className="bg-gray-200 text-gray-600 flex justify-center items-center h-32 rounded mb-3 text-sm">
                   IMAGEM
@@ -270,9 +436,23 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
                 <p className="font-semibold text-gray-900 mb-1">{prod.nome}</p>
                 <p className="text-sm text-gray-600 mb-1">Código: {prod.codigo}</p>
                 <p className="text-blue-600 font-bold text-lg">R$ {prod.preco.toFixed(2)}</p>
-                <p className="text-xs text-gray-500 mt-1">Estoque: {prod.estoque}</p>
+                <p className={`text-xs mt-1 ${
+                  prod.estoque <= 0 
+                    ? 'text-red-600 font-bold' 
+                    : prod.estoque <= 5 
+                    ? 'text-orange-600' 
+                    : 'text-gray-500'
+                }`}>
+                  {prod.estoque <= 0 ? 'SEM ESTOQUE' : `Estoque: ${prod.estoque}`}
+                </p>
               </div>
             ))}
+            {produtosFiltrados.length === 0 && (
+              <div className="col-span-3 text-center py-8">
+                <p className="text-gray-500">Nenhum produto encontrado</p>
+                <p className="text-sm text-gray-400">Verifique o termo da busca ou cadastre novos produtos</p>
+              </div>
+            )}
           </div>
         </div>
 

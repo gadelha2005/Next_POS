@@ -7,6 +7,7 @@ import {
   Trophy,
   Wallet,
 } from "lucide-react";
+import produtoService from '../../service/produtoService';
 
 export default function AdminRelatorios() {
   const [dadosRelatorios, setDadosRelatorios] = useState({
@@ -17,22 +18,81 @@ export default function AdminRelatorios() {
     produtosMaisVendidos: [],
     formasPagamento: {}
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     carregarDadosRelatorios();
   }, []);
 
-  const carregarDadosRelatorios = () => {
-    const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+  const carregarDadosRelatorios = async () => {
+    try {
+      setLoading(true);
+      
+      // Carregar produtos da API
+      const response = await produtoService.listarProdutos();
+      const produtos = response.produtos || [];
+      
+      // Carregar vendas do localStorage
+      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      
+      // Cálculo de receita e vendas
+      const receitaTotal = vendas.reduce((acc, venda) => acc + venda.total, 0);
+      const totalVendas = vendas.length;
+      const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
+      const produtosAtivos = produtos.length;
+
+      // Cálculo de produtos mais vendidos
+      const produtosVendidos = {};
+      vendas.forEach(venda => {
+        venda.itens.forEach(item => {
+          if (produtosVendidos[item.nome]) {
+            produtosVendidos[item.nome] += item.qtd;
+          } else {
+            produtosVendidos[item.nome] = item.qtd;
+          }
+        });
+      });
+
+      const produtosMaisVendidos = Object.entries(produtosVendidos)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 3)
+        .map(([nome, quantidade]) => ({ nome, quantidade }));
+
+      // Cálculo de formas de pagamento
+      const formasPagamento = {};
+      vendas.forEach(venda => {
+        const metodo = venda.metodoPagamento;
+        formasPagamento[metodo] = (formasPagamento[metodo] || 0) + 1;
+      });
+
+      setDadosRelatorios({
+        receitaTotal,
+        totalVendas,
+        ticketMedio,
+        produtosAtivos,
+        produtosMaisVendidos,
+        formasPagamento
+      });
+      
+    } catch (error) {
+      console.error('Erro ao carregar dados dos relatórios:', error);
+      // Fallback para localStorage em caso de erro
+      carregarDadosFallback();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarDadosFallback = () => {
+    // Fallback: carregar do localStorage se a API falhar
     const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
+    const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
     
-    // Cálculo de receita e vendas
     const receitaTotal = vendas.reduce((acc, venda) => acc + venda.total, 0);
     const totalVendas = vendas.length;
     const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
     const produtosAtivos = produtos.length;
 
-    // Cálculo de produtos mais vendidos
     const produtosVendidos = {};
     vendas.forEach(venda => {
       venda.itens.forEach(item => {
@@ -49,7 +109,6 @@ export default function AdminRelatorios() {
       .slice(0, 3)
       .map(([nome, quantidade]) => ({ nome, quantidade }));
 
-    // Cálculo de formas de pagamento
     const formasPagamento = {};
     vendas.forEach(venda => {
       const metodo = venda.metodoPagamento;
@@ -157,6 +216,16 @@ export default function AdminRelatorios() {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
@@ -166,13 +235,14 @@ export default function AdminRelatorios() {
         </div>
         <button 
           onClick={carregarDadosRelatorios}
-          className="border border-gray-300 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition flex items-center gap-2"
+          disabled={loading}
+          className="border border-gray-300 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition flex items-center gap-2 disabled:opacity-50"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
-          Atualizar
+          {loading ? 'Carregando...' : 'Atualizar'}
         </button>
       </div>
 
@@ -201,7 +271,7 @@ export default function AdminRelatorios() {
         <Card
           title="Produtos Ativos"
           value={dadosRelatorios.produtosAtivos}
-          subtitle="Cadastrados no sistema"
+          subtitle="Produtos Cadastrados"
           icon={<Package className="text-green-600" size={20} />}
         />
         

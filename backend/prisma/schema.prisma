@@ -1,4 +1,4 @@
-// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,13 +8,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Usuario {"
+
+model Usuario {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   nome      String
   email     String   @unique
   senha     String
   role      String   @default("caixa")
   caixas    Caixa[]
+  vendas    Venda[]  
   createdAt DateTime @default(now()) @map("created_at")
   
   @@map("usuarios")
@@ -29,7 +31,133 @@ model Caixa {
   status         String   @default("aberto") // aberto, fechado
   usuarioId      String   @db.ObjectId
   usuario        Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  vendas         Venda[]  
   createdAt      DateTime @default(now()) @map("created_at")
   
   @@map("caixas")
+}
+
+model Produto {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  nome         String
+  codigo       String     @unique
+  codigoBarras String?    @unique
+  categoria    String
+  preco        Float
+  custo        Float?     
+  estoque      Int
+  estoqueMinimo Int       @default(5)
+  imagem       String?    // URL da imagem
+  ativo        Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  vendas       VendaItem[]
+  
+  @@map("produtos")
+}
+
+model Cliente {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  nome      String
+  cpfCnpj   String?  @unique
+  telefone  String?
+  email     String?
+  endereco  String?
+  createdAt DateTime @default(now())
+  
+  vendas    Venda[]
+  
+  @@map("clientes")
+}
+
+model Venda {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  numero          Int      @unique // Número sequencial
+  clienteId       String?  @db.ObjectId
+  cliente         Cliente? @relation(fields: [clienteId], references: [id])
+  usuarioId       String   @db.ObjectId
+  usuario         Usuario  @relation(fields: [usuarioId], references: [id])
+  caixaId         String   @db.ObjectId
+  caixa           Caixa    @relation(fields: [caixaId], references: [id])
+  
+  itens           VendaItem[]
+  logPagamentos   LogPagamento[] 
+  subtotal        Float
+  desconto        Float    @default(0)
+  total           Float
+  metodoPagamento String   // dinheiro, cartao_credito, cartao_debito, pix
+  statusPagamento String   @default("aprovado") // aprovado, pendente, recusado
+  valorRecebido   Float?
+  troco           Float?   @default(0)
+  
+  // NF-e
+  chaveNfe        String?
+  statusNfe       String   @default("pendente") // pendente, processando, autorizada, erro
+  xmlNfe          String?
+  numeroNfe       String?
+  
+  // Dados para relatórios
+  dataVenda       DateTime @default(now())
+  createdAt       DateTime @default(now())
+  
+  @@map("vendas")
+}
+
+model VendaItem {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  vendaId   String  @db.ObjectId
+  produtoId String  @db.ObjectId
+  produto   Produto @relation(fields: [produtoId], references: [id])
+  quantidade Int
+  precoUnitario Float
+  subtotal  Float
+  
+  venda     Venda   @relation(fields: [vendaId], references: [id], onDelete: Cascade)
+  
+  @@map("venda_itens")
+}
+
+model Configuracao {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  nomeLoja      String   @default("Minha Loja")
+  cnpj          String?
+  endereco      String?
+  telefone      String?
+  email         String?
+  
+  // Configurações de Pagamento
+  tokenApiPagamento String?  // Token da API de pagamento
+  chavePix          String?  // Chave PIX da loja
+  taxaCartaoCredito Float    @default(2.99)
+  taxaCartaoDebito  Float    @default(1.99)
+  
+  // Configurações de NF-e
+  tokenApiNfe       String?  // Token da API de nota fiscal
+  serieNfe          String   @default("1")
+  ambienteNfe       String   @default("homologacao") // homologacao, producao
+  
+  // Configurações do Sistema
+  moeda             String   @default("BRL")
+  fusoHorario       String   @default("America/Sao_Paulo")
+  taxaImposto       Float    @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("configuracoes")
+}
+
+model LogPagamento {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  vendaId         String   @db.ObjectId
+  venda           Venda    @relation(fields: [vendaId], references: [id])
+  metodo          String   // cartao_credito, cartao_debito, pix
+  valor           Float
+  status          String   // processing, approved, rejected
+  codigoTransacao String?  // Código da transação na API
+  respostaApi     String?  // Resposta completa da API (JSON)
+  createdAt       DateTime @default(now())
+  
+  @@map("log_pagamentos")
 }
