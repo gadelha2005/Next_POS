@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { TrendingUp, ShoppingCart, Users, Package } from "lucide-react";
 import { useEffect, useState } from "react";
+import produtoService from '../../service/produtoService';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -12,18 +13,59 @@ export default function AdminDashboard() {
   });
 
   const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     carregarDadosDashboard();
   }, []);
 
-  const carregarDadosDashboard = () => {
-    // Carregar dados do localStorage
+  const carregarDadosDashboard = async () => {
+    try {
+      setLoading(true);
+      
+      // Carregar produtos da API
+      const response = await produtoService.listarProdutos();
+      const produtos = response.produtos || [];
+      
+      // Carregar outros dados do localStorage
+      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      
+      // Calcular vendas de hoje
+      const hoje = new Date().toDateString();
+      const vendasHoje = vendas.filter(venda => 
+        new Date(venda.data).toDateString() === hoje
+      );
+      
+      const receitaHoje = vendasHoje.reduce((acc, venda) => acc + venda.total, 0);
+      const estoqueBaixo = produtos.filter(prod => prod.estoque <= 5).length;
+      const produtosBaixo = produtos.filter(prod => prod.estoque <= 5);
+
+      setStats({
+        vendasHoje: vendasHoje.length,
+        totalProdutos: produtos.length,
+        totalClientes: clientes.length,
+        estoqueBaixo: estoqueBaixo,
+        receitaTotal: receitaHoje
+      });
+
+      setProdutosEstoqueBaixo(produtosBaixo);
+      
+    } catch (error) {
+      console.error('Erro ao carregar dados do dashboard:', error);
+      // Fallback para localStorage em caso de erro
+      carregarDadosFallback();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const carregarDadosFallback = () => {
+    // Fallback: carregar do localStorage se a API falhar
     const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
     const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
     const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
     
-    // Calcular vendas de hoje
     const hoje = new Date().toDateString();
     const vendasHoje = vendas.filter(venda => 
       new Date(venda.data).toDateString() === hoje
@@ -44,49 +86,42 @@ export default function AdminDashboard() {
     setProdutosEstoqueBaixo(produtosBaixo);
   };
 
-  // Inicializar dados se não existirem
+  // Inicializar dados básicos se não existirem
   useEffect(() => {
-    const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
-    const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+    const inicializarDadosBasicos = () => {
+      // Inicializar clientes se não existirem
+      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+      if (clientes.length === 0) {
+        const clientesIniciais = [
+          {
+            id: 1,
+            nome: "João Silva",
+            cpf: "123.456.789-00",
+            telefone: "(11) 98765-4321",
+            email: "joao@email.com",
+          },
+          {
+            id: 2,
+            nome: "Maria Santos",
+            cpf: "987.654.321-00",
+            telefone: "(11) 91234-5678",
+            email: "maria@email.com",
+          },
+        ];
+        localStorage.setItem('clientes', JSON.stringify(clientesIniciais));
+      }
 
-    if (produtos.length === 0) {
-      const produtosIniciais = [
-        { id: 1, nome: "Coca-Cola 2L", codigo: "789012", categoria: "Bebidas", preco: 8.99, estoque: 50 },
-        { id: 2, nome: "Arroz 5kg", codigo: "123456", categoria: "Alimentos", preco: 25.90, estoque: 30 },
-        { id: 3, nome: "Feijão 1kg", codigo: "234567", categoria: "Alimentos", preco: 7.50, estoque: 5 },
-        { id: 4, nome: "Açúcar 1kg", codigo: "345678", categoria: "Alimentos", preco: 4.99, estoque: 40 },
-        { id: 5, nome: "Café 500g", codigo: "456789", categoria: "Alimentos", preco: 12.90, estoque: 25 },
-      ];
-      localStorage.setItem('produtos', JSON.stringify(produtosIniciais));
-    }
+      // Inicializar vendas se não existirem
+      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      if (vendas.length === 0) {
+        localStorage.setItem('vendas', JSON.stringify([]));
+      }
 
-    if (clientes.length === 0) {
-      const clientesIniciais = [
-        {
-          id: 1,
-          nome: "João Silva",
-          cpf: "123.456.789-00",
-          telefone: "(11) 98765-4321",
-          email: "joao@email.com",
-        },
-        {
-          id: 2,
-          nome: "Maria Santos",
-          cpf: "987.654.321-00",
-          telefone: "(11) 91234-5678",
-          email: "maria@email.com",
-        },
-      ];
-      localStorage.setItem('clientes', JSON.stringify(clientesIniciais));
-    }
+      // Recarregar dados após inicialização
+      carregarDadosDashboard();
+    };
 
-    if (vendas.length === 0) {
-      localStorage.setItem('vendas', JSON.stringify([]));
-    }
-
-    // Recarregar dados após inicialização
-    carregarDadosDashboard();
+    inicializarDadosBasicos();
   }, []);
 
   // Dados para o gráfico (baseados nas vendas da semana)
@@ -99,6 +134,16 @@ export default function AdminDashboard() {
     { name: "Sáb", vendas: 2200 },
     { name: "Dom", vendas: 1800 },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-50 overflow-y-auto p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 overflow-y-auto p-8">
@@ -197,9 +242,9 @@ export default function AdminDashboard() {
               <div className="flex items-start space-x-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                 <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
                 <div>
-                  <p className="font-medium text-orange-800">Cadastre Produtos</p>
+                  <p className="font-medium text-orange-800">Sem Produtos</p>
                   <p className="text-sm text-orange-600">
-                    Nenhum produto cadastrado no sistema
+                    Nenhum produto cadastrado via API
                   </p>
                 </div>
               </div>

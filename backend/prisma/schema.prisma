@@ -37,7 +37,6 @@ model Caixa {
   @@map("caixas")
 }
 
-// NOVOS MODELOS (EXPANSÃO)
 model Produto {
   id           String     @id @default(auto()) @map("_id") @db.ObjectId
   nome         String
