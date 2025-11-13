@@ -39,29 +39,12 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
             localStorage.setItem('caixaAberto', 'true');
             localStorage.setItem('saldoInicial', valorInicial);
             
-            alert('Caixa aberto com sucesso!');
             onAberturaSuccess();
 
         } catch (error) {
             console.error('Erro ao abrir caixa:', error);
-            
-            // Fallback: abrir caixa localmente se a API falhar
-            if (error.message.includes('Failed to fetch') || error.message.includes('caixa já aberto')) {
-                localStorage.setItem('caixaAberto', 'true');
-                localStorage.setItem('saldoInicial', valorInicial);
-                
-                alert('Caixa aberto localmente!');
-                onAberturaSuccess();
-            } else {
-                // Mostrar erro específico da API
-                try {
-                    const errorObj = JSON.parse(error.message);
-                    alert('Erro ao abrir caixa: ' + errorObj.error);
-                } catch {
-                    alert('Erro ao abrir caixa: ' + error.message);
-                }
-            }
-        } finally {
+        } 
+        finally {
             setIsLoading(false);
         }
     };
