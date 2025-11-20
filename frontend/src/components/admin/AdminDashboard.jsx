@@ -2,6 +2,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import { TrendingUp, ShoppingCart, Users, Package } from "lucide-react";
 import { useEffect, useState } from "react";
 import produtoService from '../../service/produtoService';
+import clienteService from '../../service/clienteService'; // NOVO IMPORT
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -24,11 +25,22 @@ export default function AdminDashboard() {
       setLoading(true);
       
       // Carregar produtos da API
-      const response = await produtoService.listarProdutos();
-      const produtos = response.produtos || [];
+      const responseProdutos = await produtoService.listarProdutos();
+      const produtos = responseProdutos.produtos || [];
       
-      // Carregar outros dados do localStorage
-      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+      // CARREGAR CLIENTES DA API - NOVO
+      let totalClientes = 0;
+      try {
+        const responseClientes = await clienteService.listarClientes();
+        totalClientes = responseClientes.clientes ? responseClientes.clientes.length : 0;
+      } catch (error) {
+        console.error('Erro ao carregar clientes da API:', error);
+        // Fallback para localStorage se API falhar
+        const clientesLocal = JSON.parse(localStorage.getItem('clientes') || '[]');
+        totalClientes = clientesLocal.length;
+      }
+      
+      // Carregar vendas do localStorage (por enquanto)
       const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
       
       // Calcular vendas de hoje
@@ -44,7 +56,7 @@ export default function AdminDashboard() {
       setStats({
         vendasHoje: vendasHoje.length,
         totalProdutos: produtos.length,
-        totalClientes: clientes.length,
+        totalClientes: totalClientes, // AGORA VEM DA API
         estoqueBaixo: estoqueBaixo,
         receitaTotal: receitaHoje
       });
@@ -53,7 +65,7 @@ export default function AdminDashboard() {
       
     } catch (error) {
       console.error('Erro ao carregar dados do dashboard:', error);
-      // Fallback para localStorage em caso de erro
+      // Fallback completo para localStorage em caso de erro
       carregarDadosFallback();
     } finally {
       setLoading(false);
@@ -89,7 +101,7 @@ export default function AdminDashboard() {
   // Inicializar dados básicos se não existirem
   useEffect(() => {
     const inicializarDadosBasicos = () => {
-      // Inicializar clientes se não existirem
+      // Inicializar clientes se não existirem (apenas localStorage)
       const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
       if (clientes.length === 0) {
         const clientesIniciais = [
@@ -192,6 +204,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Resto do código permanece igual... */}
       {/* Gráfico e Alertas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Gráfico de Vendas */}
@@ -250,7 +263,20 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {stats.estoqueBaixo === 0 && stats.vendasHoje > 0 && stats.totalProdutos > 0 && (
+            {/* NOVO ALERTA PARA CLIENTES */}
+            {stats.totalClientes === 0 && (
+              <div className="flex items-start space-x-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <p className="font-medium text-purple-800">Sem Clientes</p>
+                  <p className="text-sm text-purple-600">
+                    Nenhum cliente cadastrado no sistema
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {stats.estoqueBaixo === 0 && stats.vendasHoje > 0 && stats.totalProdutos > 0 && stats.totalClientes > 0 && (
               <div className="flex items-start space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
                 <div>
@@ -265,6 +291,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Resto do código permanece igual... */}
       {/* Produtos com Estoque Baixo */}
       {produtosEstoqueBaixo.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">

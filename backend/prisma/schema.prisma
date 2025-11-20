@@ -62,7 +62,7 @@ model Cliente {
   nome      String
   cpfCnpj   String?  @unique
   telefone  String?
-  email     String?
+  email     String?  @unique
   endereco  String?
   createdAt DateTime @default(now())
   

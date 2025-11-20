@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoute";
 import caixaRoutes from "./routes/caixaRoutes";
 import produtoRoutes from "./routes/produtoRoutes"
 import initDatabase from "./script/init-database";
+import clienteRoutes from './routes/clienteRoutes';
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use('/uploads', express.static('uploads'));
 app.use("/api/auth", authRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/produtos", produtoRoutes);
+app.use('/api/clientes', clienteRoutes);
 
 // Rota de saúde
 app.get("/health", (req, res) => {
