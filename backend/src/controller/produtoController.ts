@@ -1,8 +1,7 @@
-// src/controllers/produtos/produtoController.ts
 import { Request, Response } from 'express';
 import { prisma } from "../config/prisma";
 import { Produto, CreateProdutoData, UpdateProdutoData } from '../model/Produto';
-
+import imageSearchService from '../service/imageSearchService';
 
 interface CustomRequest extends Request {
   file?: Express.Multer.File;
@@ -10,12 +9,10 @@ interface CustomRequest extends Request {
 
 export class ProdutoController {
   
-  // CREATE - Criar novo produto
   async criarProduto(req: CustomRequest, res: Response) {
     try {
       const { nome, codigo, codigoBarras, categoria, preco, custo, estoque, estoqueMinimo }: CreateProdutoData = req.body;
 
-      // Validações básicas
       if (!nome || !categoria || !preco || estoque === undefined) {
         return res.status(400).json({ error: 'Nome, categoria, preço e estoque são obrigatórios' });
       }
@@ -24,7 +21,15 @@ export class ProdutoController {
         return res.status(400).json({ error: 'Preço e estoque devem ser positivos' });
       }
 
-      // Verificar se código já existe
+      let imagemUrl = null;
+      if (!req.file) {
+        try {
+          imagemUrl = await imageSearchService.buscarImagemProduto(nome, codigoBarras);
+        } catch (error) {
+          imagemUrl = null;
+        }
+      }
+
       if (codigo) {
         const produtoExistente = await prisma.produto.findUnique({
           where: { codigo }
@@ -35,22 +40,30 @@ export class ProdutoController {
         }
       }
 
-      // Gerar código automático se não fornecido
       const codigoFinal = codigo || `PROD${Date.now()}`;
       const codigoBarrasFinal = codigoBarras || codigoFinal;
 
+      const produtoData: any = {
+        nome,
+        codigo: codigoFinal,
+        codigoBarras: codigoBarrasFinal,
+        categoria,
+        preco: parseFloat(preco.toString()),
+        custo: custo ? parseFloat(custo.toString()) : null,
+        estoque: parseInt(estoque.toString()),
+        estoqueMinimo: parseInt(estoqueMinimo?.toString() || "5"),
+      };
+
+      if (req.file) {
+        produtoData.imagem = `/uploads/${req.file.filename}`;
+      } else if (imagemUrl) {
+        produtoData.imagem = imagemUrl;
+      } else {
+        produtoData.imagem = null;
+      }
+
       const produto = await prisma.produto.create({
-        data: {
-          nome,
-          codigo: codigoFinal,
-          codigoBarras: codigoBarrasFinal,
-          categoria,
-          preco: parseFloat(preco.toString()),
-          custo: custo ? parseFloat(custo.toString()) : null,
-          estoque: parseInt(estoque.toString()),
-          estoqueMinimo: parseInt(estoqueMinimo?.toString() || "5"),
-          imagem: req.file ? `/uploads/${req.file.filename}` : null,
-        }
+        data: produtoData
       });
 
       res.status(201).json({
@@ -59,12 +72,10 @@ export class ProdutoController {
       });
 
     } catch (error: any) {
-      console.error('Erro ao criar produto:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // READ - Listar produtos com paginação e filtros
   async listarProdutos(req: Request, res: Response) {
     try {
       const { pagina = '1', limite = '10', busca, categoria, ativo = 'true' } = req.query;
@@ -73,7 +84,6 @@ export class ProdutoController {
       const limiteNum = parseInt(limite as string);
       const skip = (paginaNum - 1) * limiteNum;
       
-      // Construir filtros
       const where: any = { 
         ativo: ativo === 'true' 
       };
@@ -111,12 +121,10 @@ export class ProdutoController {
       });
 
     } catch (error: any) {
-      console.error('Erro ao listar produtos:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // READ - Buscar produto por ID
   async buscarProduto(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -132,12 +140,10 @@ export class ProdutoController {
       res.json({ produto });
 
     } catch (error: any) {
-      console.error('Erro ao buscar produto:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // READ - Busca rápida por código ou código de barras (para o caixa)
   async buscarPorCodigo(req: Request, res: Response) {
     try {
       const { codigo } = req.params;
@@ -159,18 +165,15 @@ export class ProdutoController {
       res.json({ produto });
 
     } catch (error: any) {
-      console.error('Erro ao buscar produto por código:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // UPDATE - Atualizar produto
   async atualizarProduto(req: CustomRequest, res: Response) {
     try {
       const { id } = req.params;
       const { nome, categoria, preco, custo, estoque, estoqueMinimo, ativo }: UpdateProdutoData = req.body;
 
-      // Verificar se produto existe
       const produtoExistente = await prisma.produto.findUnique({
         where: { id }
       });
@@ -183,7 +186,6 @@ export class ProdutoController {
         updatedAt: new Date()
       };
 
-      // Apenas atualiza campos que foram fornecidos
       if (nome !== undefined) dadosAtualizacao.nome = nome;
       if (categoria !== undefined) dadosAtualizacao.categoria = categoria;
       if (preco !== undefined) dadosAtualizacao.preco = parseFloat(preco.toString());
@@ -191,7 +193,10 @@ export class ProdutoController {
       if (estoque !== undefined) dadosAtualizacao.estoque = parseInt(estoque.toString());
       if (estoqueMinimo !== undefined) dadosAtualizacao.estoqueMinimo = parseInt(estoqueMinimo.toString());
       if (ativo !== undefined) dadosAtualizacao.ativo = ativo;
-      if (req.file) dadosAtualizacao.imagem = `/uploads/${req.file.filename}`;
+      
+      if (req.file) {
+        dadosAtualizacao.imagem = `/uploads/${req.file.filename}`;
+      }
 
       const produto = await prisma.produto.update({
         where: { id },
@@ -204,12 +209,10 @@ export class ProdutoController {
       });
 
     } catch (error: any) {
-      console.error('Erro ao atualizar produto:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // DELETE - Desativar produto (soft delete)
   async desativarProduto(req: Request, res: Response) {
     try {
       const { id } = req.params;
@@ -233,12 +236,10 @@ export class ProdutoController {
       res.json({ message: 'Produto desativado com sucesso' });
 
     } catch (error: any) {
-      console.error('Erro ao desativar produto:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // READ - Produtos com estoque baixo
   async getEstoqueBaixo(req: Request, res: Response) {
     try {
       const produtos = await prisma.produto.findMany({
@@ -254,12 +255,10 @@ export class ProdutoController {
       res.json({ produtos });
 
     } catch (error: any) {
-      console.error('Erro ao buscar produtos com estoque baixo:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // MIGRAÇÃO - Importar dados do localStorage para o banco
   async migrarDadosLocalStorage(req: Request, res: Response) {
     try {
       const { produtos } = req.body;
@@ -273,7 +272,6 @@ export class ProdutoController {
 
       for (const produtoLocal of produtos) {
         try {
-          // Verificar se já existe pelo código
           const existe = await prisma.produto.findUnique({
             where: { codigo: produtoLocal.codigo }
           });
@@ -310,12 +308,10 @@ export class ProdutoController {
       });
 
     } catch (error: any) {
-      console.error('Erro na migração de produtos:', error.message);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
   }
 
-  // Método auxiliar - Gerar código automático
   private async gerarCodigoAutomatico(): Promise<string> {
     const ultimoProduto = await prisma.produto.findFirst({
       orderBy: { createdAt: 'desc' },

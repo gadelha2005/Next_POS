@@ -16,7 +16,7 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
             
             
             const requestBody = {
-                valorInicial: parseFloat(valorInicial) // Campo correto que a API espera
+                valorInicial: parseFloat(valorInicial) 
             };
 
 
@@ -112,9 +112,6 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
                             disabled={isLoading}
                             autoFocus
                         />
-                        <p className="text-xs text-gray-500 mt-1 text-center">
-                            Valor sugerido: R$ 500,00
-                        </p>
                     </div>
 
                     <hr className="my-6 border-gray-300" />

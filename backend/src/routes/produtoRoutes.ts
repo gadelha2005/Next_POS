@@ -1,76 +1,126 @@
-// src/routes/produtos.ts
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { ProdutoController } from '../controller/produtoController';
 import { authMiddleware } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import imageSearchService from '../service/imageSearchService';
 
 const router = Router();
 const produtoController = new ProdutoController();
 
-// Criar diretório de uploads se não existir
-const uploadsDir = path.join(__dirname, '../../uploads');
+const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configuração do multer para upload de imagens
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'produto-' + uniqueSuffix + path.extname(file.originalname));
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, 'produto-' + uniqueSuffix + ext);
   }
 });
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
+    fileSize: 5 * 1024 * 1024
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-
-    if (mimetype && extname) {
-      return cb(null, true);
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
     } else {
-      cb(new Error('Apenas imagens são permitidas'));
+      cb(new Error('Tipo de arquivo não suportado. Use apenas JPEG, PNG, GIF ou WebP.'));
     }
   }
 });
 
-// Todas as rotas exigem autenticação
+const handleMulterError = (error: any, req: Request, res: Response, next: any) => {
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'Arquivo muito grande. Tamanho máximo: 5MB.' });
+    }
+    return res.status(400).json({ error: `Erro no upload: ${error.message}` });
+  } else if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  next();
+};
+
 router.use(authMiddleware);
 
-// ROTAS CRUD PRODUTOS
+router.post('/', upload.single('imagem'), handleMulterError, (req: Request, res: Response) => 
+  produtoController.criarProduto(req, res)
+);
 
-// POST /api/produtos - Criar novo produto (com upload de imagem)
-router.post('/', upload.single('imagem'), produtoController.criarProduto);
+router.get('/', (req: Request, res: Response) => 
+  produtoController.listarProdutos(req, res)
+);
 
-// GET /api/produtos - Listar produtos com paginação e filtros
-router.get('/', produtoController.listarProdutos);
+router.get('/estoque/baixo', (req: Request, res: Response) => 
+  produtoController.getEstoqueBaixo(req, res)
+);
 
-// GET /api/produtos/estoque/baixo - Produtos com estoque baixo
-router.get('/estoque/baixo', produtoController.getEstoqueBaixo);
+router.get('/:id', (req: Request, res: Response) => 
+  produtoController.buscarProduto(req, res)
+);
 
-// GET /api/produtos/:id - Buscar produto por ID
-router.get('/:id', produtoController.buscarProduto);
+router.get('/codigo/:codigo', (req: Request, res: Response) => 
+  produtoController.buscarPorCodigo(req, res)
+);
 
-// GET /api/produtos/codigo/:codigo - Busca rápida por código ou código de barras
-router.get('/codigo/:codigo', produtoController.buscarPorCodigo);
+router.put('/:id', upload.single('imagem'), handleMulterError, (req: Request, res: Response) => 
+  produtoController.atualizarProduto(req, res)
+);
 
-// PUT /api/produtos/:id - Atualizar produto (com upload de imagem opcional)
-router.put('/:id', upload.single('imagem'), produtoController.atualizarProduto);
+router.delete('/:id', (req: Request, res: Response) => 
+  produtoController.desativarProduto(req, res)
+);
 
-// DELETE /api/produtos/:id - Desativar produto (soft delete)
-router.delete('/:id', produtoController.desativarProduto);
+router.post('/migrar/localstorage', (req: Request, res: Response) => 
+  produtoController.migrarDadosLocalStorage(req, res)
+);
 
-// POST /api/produtos/migrar - Migrar dados do localStorage para o banco
-router.post('/migrar/localstorage', produtoController.migrarDadosLocalStorage);
+router.post('/buscar-imagem', async (req: Request, res: Response) => {
+  try {
+    const { nomeProduto, codigoBarras } = req.body;
+
+    if (!nomeProduto) {
+      return res.status(400).json({ error: 'Nome do produto é obrigatório' });
+    }
+
+    const imagemUrl = await imageSearchService.buscarImagemProduto(nomeProduto, codigoBarras);
+
+    res.json({
+      success: true,
+      imagemUrl,
+      mensagem: imagemUrl ? 'Imagem encontrada com sucesso' : 'Nenhuma imagem encontrada'
+    });
+
+  } catch (error: any) {
+    res.status(500).json({ 
+      success: false,
+      error: 'Erro ao buscar imagem',
+      imagemUrl: null
+    });
+  }
+});
+
+router.get('/imagem/:filename', (req: Request, res: Response) => {
+  const { filename } = req.params;
+  const imagePath = path.join(uploadsDir, filename);
+  
+  if (!fs.existsSync(imagePath)) {
+    return res.status(404).json({ error: 'Imagem não encontrada' });
+  }
+  
+  res.sendFile(imagePath);
+});
 
 export default router;
