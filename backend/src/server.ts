@@ -7,6 +7,7 @@ import caixaRoutes from "./routes/caixaRoutes";
 import produtoRoutes from "./routes/produtoRoutes"
 import initDatabase from "./script/init-database";
 import clienteRoutes from './routes/clienteRoutes';
+import vendaRoutes from './routes/vendaRoutes';
 import path from "path";
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/produtos", produtoRoutes);
 app.use('/api/clientes', clienteRoutes);
+app.use("/api/vendas" , vendaRoutes)
 
 // Rota de saúde
 app.get("/health", (req, res) => {
