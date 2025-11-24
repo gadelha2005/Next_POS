@@ -7,6 +7,7 @@ import caixaRoutes from "./routes/caixaRoutes";
 import produtoRoutes from "./routes/produtoRoutes"
 import initDatabase from "./script/init-database";
 import clienteRoutes from './routes/clienteRoutes';
+import path from "path";
 
 dotenv.config();
 
@@ -31,7 +32,7 @@ app.use(
 app.use(express.json());
 
 // Arquivos Estáticos das Imagens
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Rotas
 app.use("/api/auth", authRoutes);

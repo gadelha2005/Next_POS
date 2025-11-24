@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, Plus, X, AlertTriangle } from "lucide-react";
+import { Edit, Trash2, Plus, X, AlertTriangle, Loader } from "lucide-react";
 import produtoService from '../../service/produtoService';
 
 export default function AdminProdutos() {
@@ -15,6 +15,7 @@ export default function AdminProdutos() {
     preco: '',
     estoque: ''
   });
+  const [submitting, setSubmitting] = useState(false); // ✅ NOVO: Estado de loading do formulário
 
   // Carregar produtos da API
   useEffect(() => {
@@ -67,12 +68,19 @@ export default function AdminProdutos() {
   };
 
   const fecharModal = () => {
-    setShowModal(false);
-    setEditingProduct(null);
+    if (!submitting) { // ✅ Só permite fechar se não estiver enviando
+      setShowModal(false);
+      setEditingProduct(null);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Previne múltiplos cliques
+    if (submitting) return;
+    
+    setSubmitting(true); // ✅ Ativa loading
     
     try {
       const produtoData = {
@@ -93,6 +101,8 @@ export default function AdminProdutos() {
     } catch (error) {
       console.error('Erro ao salvar produto:', error);
       alert('Erro ao salvar produto: ' + error.message);
+    } finally {
+      setSubmitting(false); // ✅ Desativa loading independente do resultado
     }
   };
 
@@ -218,7 +228,8 @@ export default function AdminProdutos() {
               </h3>
               <button 
                 onClick={fecharModal}
-                className="text-gray-500 hover:text-gray-700"
+                disabled={submitting} // ✅ Desabilita botão durante loading
+                className={`text-gray-500 hover:text-gray-700 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <X size={20} />
               </button>
@@ -234,6 +245,7 @@ export default function AdminProdutos() {
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg p-2"
                   required
+                  disabled={submitting} // ✅ Desabilita campos durante loading
                 />
               </div>
               
@@ -246,6 +258,7 @@ export default function AdminProdutos() {
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg p-2"
                   required
+                  disabled={submitting} // ✅ Desabilita campos durante loading
                 />
               </div>
               
@@ -260,6 +273,7 @@ export default function AdminProdutos() {
                     onChange={handleInputChange}
                     className="w-full border border-gray-300 rounded-lg p-2"
                     required
+                    disabled={submitting} // ✅ Desabilita campos durante loading
                   />
                 </div>
                 
@@ -272,6 +286,7 @@ export default function AdminProdutos() {
                     onChange={handleInputChange}
                     className="w-full border border-gray-300 rounded-lg p-2"
                     required
+                    disabled={submitting} //
                   />
                 </div>
               </div>
@@ -280,15 +295,26 @@ export default function AdminProdutos() {
                 <button
                   type="button"
                   onClick={fecharModal}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  disabled={submitting} // ✅ Desabilita botão durante loading
+                  className={`px-4 py-2 text-gray-600 hover:text-gray-800 ${submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  disabled={submitting} // ✅ Desabilita botão durante loading
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 ${
+                    submitting ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  {editingProduct ? 'Atualizar' : 'Salvar'}
+                  {submitting ? (
+                    <>
+                      <Loader size={18} className="animate-spin" />
+                      {editingProduct ? 'Atualizando...' : 'Salvando...'}
+                    </>
+                  ) : (
+                    editingProduct ? 'Atualizar' : 'Salvar'
+                  )}
                 </button>
               </div>
             </form>

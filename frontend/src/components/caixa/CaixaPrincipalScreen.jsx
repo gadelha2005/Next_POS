@@ -15,7 +15,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const [saldoFinal, setSaldoFinal] = useState('');
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [caixaAberto ,setCaixaAberto] = useState(true);
+  const [caixaAberto, setCaixaAberto] = useState(true);
 
   // Carregar produtos da API e vendas do localStorage
   useEffect(() => {
@@ -50,8 +50,15 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
 
   const carregarVendasRecentes = () => {
     const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
-    setHistoricoVendas(vendasSalvas.slice(0, 5));
-  };
+    
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const vendasDoDia = vendasSalvas.filter(venda => {
+      const dataVenda = new Date(venda.data.split(', ')[0]).toLocaleDateString('pt-BR');
+      return dataVenda === hoje;
+    });
+  
+  setHistoricoVendas(vendasDoDia.slice(0, 5));
+};
 
   const produtosFiltrados = produtos.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) || 
@@ -266,6 +273,35 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     setVendaSelecionada(null);
   };
 
+ 
+  const ImagemProduto = ({ produto }) => {
+    const [erroImagem, setErroImagem] = useState(false);
+    
+    // Se não tem imagem ou deu erro, mostrar placeholder
+    if (!produto.imagem || erroImagem) {
+      return (
+        <div className="w-full h-32 bg-gray-200 rounded mb-3 flex items-center justify-center">
+          <span className="text-gray-500 text-sm">SEM IMAGEM</span>
+        </div>
+      );
+    }
+
+    // Verificar se é URL externa ou local
+    const isExternalUrl = produto.imagem.startsWith('http');
+    const imageUrl = isExternalUrl 
+      ? produto.imagem 
+      : `http://localhost:3333${produto.imagem}`;
+
+    return (
+      <img 
+        src={imageUrl}
+        alt={produto.nome}
+        className="w-full h-32 object-cover rounded mb-3"
+        onError={() => setErroImagem(true)}
+      />
+    );
+  };
+
   // Ícones SVG inline (mantenha os mesmos ícones)
   const SearchIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -412,9 +448,9 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
                     : 'border-gray-300 hover:bg-gray-50 hover:border-blue-500'
                 }`}
               >
-                <div className="bg-gray-200 text-gray-600 flex justify-center items-center h-32 rounded mb-3 text-sm">
-                  IMAGEM
-                </div>
+                {/* ✅ ATUALIZADO: Componente de imagem */}
+                <ImagemProduto produto={prod} />
+                
                 <p className="font-semibold text-gray-900 mb-1">{prod.nome}</p>
                 <p className="text-sm text-gray-600 mb-1">Código: {prod.codigo}</p>
                 <p className="text-blue-600 font-bold text-lg">R$ {prod.preco.toFixed(2)}</p>
