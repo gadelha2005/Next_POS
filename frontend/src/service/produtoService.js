@@ -2,7 +2,6 @@ const API_BASE_URL = 'http://localhost:3333/api';
 
 class ProdutoService {
   getToken() {
-    // Pega o token atualizado a cada requisição
     return localStorage.getItem('token');
   }
 
@@ -14,38 +13,34 @@ class ProdutoService {
     }
 
     const url = `${API_BASE_URL}${endpoint}`;
+    
     const config = {
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
       ...options
     };
 
-    try {
-      const response = await fetch(url, config);
-      
-      if (response.status === 401) {
-        // Token expirado ou inválido
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        return;
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status}: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Erro na requisição:', error);
-      throw error;
+    if (!(options.body instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
     }
+
+    const response = await fetch(url, config);
+    
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      return;
+    }
+    
+    if (!response.ok) {
+      throw new Error(`Erro ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
   }
 
-
-  // CRUD de Produtos
   async listarProdutos(filtros = {}) {
     const params = new URLSearchParams(filtros).toString();
     return this.request(`/produtos?${params}`);
@@ -59,17 +54,50 @@ class ProdutoService {
     return this.request(`/produtos/codigo/${codigo}`);
   }
 
-  async criarProduto(dadosProduto) {
+  async criarProduto(dadosProduto, arquivoImagem = null) {
+    let body;
+    
+    if (arquivoImagem) {
+      body = new FormData();
+      body.append('nome', dadosProduto.nome);
+      body.append('categoria', dadosProduto.categoria);
+      body.append('preco', dadosProduto.preco.toString());
+      body.append('estoque', dadosProduto.estoque.toString());
+      
+      if (dadosProduto.codigo) body.append('codigo', dadosProduto.codigo);
+      if (dadosProduto.codigoBarras) body.append('codigoBarras', dadosProduto.codigoBarras);
+      if (dadosProduto.custo) body.append('custo', dadosProduto.custo.toString());
+      if (dadosProduto.estoqueMinimo) body.append('estoqueMinimo', dadosProduto.estoqueMinimo.toString());
+      
+      body.append('imagem', arquivoImagem);
+    } else {
+      body = JSON.stringify(dadosProduto);
+    }
+
     return this.request('/produtos', {
       method: 'POST',
-      body: JSON.stringify(dadosProduto)
+      body: body
     });
   }
 
-  async atualizarProduto(id, dadosProduto) {
+  async atualizarProduto(id, dadosProduto, arquivoImagem = null) {
+    let body;
+    
+    if (arquivoImagem) {
+      body = new FormData();
+      Object.keys(dadosProduto).forEach(key => {
+        if (dadosProduto[key] !== undefined && key !== 'imagem') {
+          body.append(key, dadosProduto[key].toString());
+        }
+      });
+      body.append('imagem', arquivoImagem);
+    } else {
+      body = JSON.stringify(dadosProduto);
+    }
+
     return this.request(`/produtos/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(dadosProduto)
+      body: body
     });
   }
 
@@ -87,6 +115,13 @@ class ProdutoService {
     return this.request('/produtos/migrar/localstorage', {
       method: 'POST',
       body: JSON.stringify({ produtos })
+    });
+  }
+
+  async buscarImagemAutomatica(nomeProduto, codigoBarras = null) {
+    return this.request('/produtos/buscar-imagem', {
+      method: 'POST',
+      body: JSON.stringify({ nomeProduto, codigoBarras })
     });
   }
 }
