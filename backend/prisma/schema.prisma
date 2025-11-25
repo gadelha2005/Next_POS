@@ -15,6 +15,10 @@ model Usuario {
   email     String   @unique
   senha     String
   role      String   @default("caixa")
+
+  resetToken        String?   
+  resetTokenExpiry  DateTime?
+
   caixas    Caixa[]
   vendas    Venda[]  
   createdAt DateTime @default(now()) @map("created_at")

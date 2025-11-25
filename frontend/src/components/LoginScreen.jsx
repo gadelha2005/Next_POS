@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function LoginScreen({ onSwitchToCadastro, onLoginSuccess }) {
+function LoginScreen({ onSwitchToCadastro, onSwitchToEsqueciSenha, onLoginSuccess }) {
     const [formData, setFormData] = useState({
         email: '',
         senha: ''
@@ -130,9 +130,13 @@ function LoginScreen({ onSwitchToCadastro, onLoginSuccess }) {
                     </div>
 
                     <div className="text-right">
-                        <a href="#" className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                        <button 
+                            type="button"
+                            onClick={onSwitchToEsqueciSenha}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
+                        >
                             Esqueci a senha
-                        </a>
+                        </button>
                     </div>
 
                     <button 

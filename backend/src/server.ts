@@ -9,6 +9,7 @@ import initDatabase from "./script/init-database";
 import clienteRoutes from './routes/clienteRoutes';
 import vendaRoutes from './routes/vendaRoutes';
 import path from "path";
+import emailService from "./service/emailService";
 
 dotenv.config();
 
@@ -79,4 +80,7 @@ app.listen(PORT, async () => {
 
   // Inicializar banco de dados
   await initDatabase();
+
+  // Verificação silenciosa do serviço de email
+  await emailService.verifyConnection();
 });

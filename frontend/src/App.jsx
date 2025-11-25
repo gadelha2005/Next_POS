@@ -1,8 +1,10 @@
-// App.js (completo e corrigido)
+// App.jsx (completo e corrigido)
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import LoginScreen from './components/LoginScreen';
 import CadastroScreen from './components/CadastroScreen';
+import EsqueciSenhaScreen from './components/EsqueciSenhaScreen';
+import ResetPasswordScreen from './components/ResetPasswordScreen';
 import CaixaPrincipalScreen from './components/caixa/CaixaPrincipalScreen';
 import AdminDashboard from './components/admin/AdminDashboard';
 import AberturaCaixa from './components/caixa/AberturaCaixa';
@@ -46,8 +48,40 @@ function AdminRoutes({ user, logout, caixaAberto, handleAberturaCaixaSuccess, ha
   );
 }
 
+// Componente para rotas públicas (login, cadastro, recuperação de senha)
+function PublicRoutes({ onLoginSuccess, onRegisterSuccess }) {
+  const navigate = useNavigate();
+  
+  return (
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
+      <Routes>
+        <Route path="/login" element={
+          <LoginScreen 
+            onSwitchToCadastro={() => navigate('/cadastro')}
+            onSwitchToEsqueciSenha={() => navigate('/esqueci-senha')}
+            onLoginSuccess={onLoginSuccess}
+          />
+        } />
+        <Route path="/cadastro" element={
+          <CadastroScreen 
+            onSwitchToLogin={() => navigate('/login')}
+            onRegisterSuccess={onRegisterSuccess}
+          />
+        } />
+        <Route path="/esqueci-senha" element={
+          <EsqueciSenhaScreen 
+            onBackToLogin={() => navigate('/login')}
+          />
+        } />
+        {/* NOVA ROTA ADICIONADA */}
+        <Route path="/reset-password" element={<ResetPasswordScreen />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </div>
+  );
+}
+
 function App() {
-    const [currentScreen, setCurrentScreen] = useState('login');
     const [user, setUser] = useState(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -68,7 +102,7 @@ function App() {
         }
 
         try {
-            const response = await fetch('http://localhost:3001/api/auth/profile', {
+            const response = await fetch('http://localhost:3333/api/auth/profile', {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -156,7 +190,6 @@ function App() {
         setUser(null);
         setIsAuthenticated(false);
         setCaixaAberto(false);
-        setCurrentScreen('login');
         setIsLoading(false);
     };
 
@@ -171,69 +204,62 @@ function App() {
         );
     }
 
-    // Rotas para usuários autenticados
-    if (isAuthenticated && user) {
-        return (
-            <Router>
-                <Routes>
-                    {/* Rotas do Admin */}
-                    {user.role === 'admin' && (
-                        <Route path="/admin/*" element={
-                            <AdminRoutes 
-                                user={user} 
-                                logout={logout}
-                                caixaAberto={caixaAberto}
-                                handleAberturaCaixaSuccess={handleAberturaCaixaSuccess}
-                                handleFecharCaixa={handleFecharCaixa}
-                            />
-                        } />
-                    )}
-
-                    {/* Rotas do Caixa */}
-                    {user.role === 'caixa' && (
-                        <Route path="/*" element={
-                            !caixaAberto ? (
-                                <AberturaCaixa 
-                                    user={user} 
-                                    onAberturaSuccess={handleAberturaCaixaSuccess}
-                                    onLogout={logout}
-                                    isAdmin={false}
-                                />
-                            ) : (
-                                <CaixaPrincipalScreen 
-                                    user={user} 
-                                    onLogout={logout}
-                                    onFecharCaixa={handleFecharCaixa}
-                                    isAdmin={false}
-                                />
-                            )
-                        } />
-                    )}
-
-                    {/* Redirecionamento padrão */}
-                    <Route path="*" element={
-                        <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/'} replace />
-                    } />
-                </Routes>
-            </Router>
-        );
-    }
-
-    // Tela de login/cadastro para usuários não autenticados
     return (
-        <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
-            {currentScreen === 'login' ? (
-                <LoginScreen 
-                    onSwitchToCadastro={() => setCurrentScreen('cadastro')}
-                    onLoginSuccess={handleLoginSuccess}
-                />
-            ) : (
-                <CadastroScreen 
-                    onSwitchToLogin={() => setCurrentScreen('login')}
-                    onRegisterSuccess={handleRegisterSuccess}
-                />
-            )}
-        </div>
+        <Router>
+            <Routes>
+                {/* Rotas para usuários autenticados */}
+                {isAuthenticated && user ? (
+                    <>
+                        {/* Rotas do Admin */}
+                        {user.role === 'admin' && (
+                            <Route path="/admin/*" element={
+                                <AdminRoutes 
+                                    user={user} 
+                                    logout={logout}
+                                    caixaAberto={caixaAberto}
+                                    handleAberturaCaixaSuccess={handleAberturaCaixaSuccess}
+                                    handleFecharCaixa={handleFecharCaixa}
+                                />
+                            } />
+                        )}
+
+                        {/* Rotas do Caixa */}
+                        {user.role === 'caixa' && (
+                            <Route path="/*" element={
+                                !caixaAberto ? (
+                                    <AberturaCaixa 
+                                        user={user} 
+                                        onAberturaSuccess={handleAberturaCaixaSuccess}
+                                        onLogout={logout}
+                                        isAdmin={false}
+                                    />
+                                ) : (
+                                    <CaixaPrincipalScreen 
+                                        user={user} 
+                                        onLogout={logout}
+                                        onFecharCaixa={handleFecharCaixa}
+                                        isAdmin={false}
+                                    />
+                                )
+                            } />
+                        )}
+
+                        {/* Redirecionamento padrão para usuários autenticados */}
+                        <Route path="*" element={
+                            <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/'} replace />
+                        } />
+                    </>
+                ) : (
+                    /* Rotas públicas para usuários não autenticados */
+                    <Route path="/*" element={
+                        <PublicRoutes 
+                            onLoginSuccess={handleLoginSuccess}
+                            onRegisterSuccess={handleRegisterSuccess}
+                        />
+                    } />
+                )}
+            </Routes>
+        </Router>
     );
 }
 
