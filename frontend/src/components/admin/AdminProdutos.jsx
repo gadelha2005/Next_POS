@@ -15,7 +15,7 @@ export default function AdminProdutos() {
     preco: '',
     estoque: ''
   });
-  const [submitting, setSubmitting] = useState(false); // ✅ NOVO: Estado de loading do formulário
+  const [submitting, setSubmitting] = useState(false); 
 
   // Carregar produtos da API
   useEffect(() => {

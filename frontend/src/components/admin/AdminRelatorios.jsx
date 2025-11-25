@@ -6,8 +6,11 @@ import {
   Package,
   Trophy,
   Wallet,
+  RefreshCw,
+  AlertCircle
 } from "lucide-react";
 import produtoService from '../../service/produtoService';
+import vendaService from '../../service/vendaService';
 
 export default function AdminRelatorios() {
   const [dadosRelatorios, setDadosRelatorios] = useState({
@@ -19,49 +22,71 @@ export default function AdminRelatorios() {
     formasPagamento: {}
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     carregarDadosRelatorios();
   }, []);
 
+  const processarProdutosMaisVendidos = (vendas, produtos) => {
+    const produtosVendidos = {};
+    
+    vendas.forEach(venda => {
+      if (venda.itens && Array.isArray(venda.itens)) {
+        venda.itens.forEach(item => {
+          // Buscar nome do produto pelo produtoId
+          const produtoEncontrado = produtos.find(p => p.id === item.produtoId);
+          const nomeProduto = produtoEncontrado ? produtoEncontrado.nome : `Produto ${item.produtoId}`;
+          const quantidade = item.quantidade || item.qtd || 0;
+          
+          if (produtosVendidos[nomeProduto]) {
+            produtosVendidos[nomeProduto] += quantidade;
+          } else {
+            produtosVendidos[nomeProduto] = quantidade;
+          }
+        });
+      }
+    });
+
+    return Object.entries(produtosVendidos)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([nome, quantidade]) => ({ nome, quantidade }));
+  };
+
   const carregarDadosRelatorios = async () => {
     try {
       setLoading(true);
+      setError(null);
       
-      // Carregar produtos da API
-      const response = await produtoService.listarProdutos();
-      const produtos = response.produtos || [];
-      
-      // Carregar vendas do localStorage
-      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
-      
+      // Carregar dados em paralelo
+      const [produtosResponse, vendasResponse] = await Promise.all([
+        produtoService.listarProdutos().catch(error => {
+          console.error('Erro ao carregar produtos:', error);
+          throw new Error('Erro ao carregar produtos');
+        }),
+        vendaService.listarVendas().catch(error => {
+          console.error('Erro ao carregar vendas:', error);
+          throw new Error('Erro ao carregar vendas');
+        })
+      ]);
+
+      const produtos = produtosResponse.produtos || [];
+      const vendas = vendasResponse.vendas || [];
+
       // Cálculo de receita e vendas
-      const receitaTotal = vendas.reduce((acc, venda) => acc + venda.total, 0);
+      const receitaTotal = vendas.reduce((acc, venda) => acc + (venda.total || 0), 0);
       const totalVendas = vendas.length;
       const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
       const produtosAtivos = produtos.length;
 
       // Cálculo de produtos mais vendidos
-      const produtosVendidos = {};
-      vendas.forEach(venda => {
-        venda.itens.forEach(item => {
-          if (produtosVendidos[item.nome]) {
-            produtosVendidos[item.nome] += item.qtd;
-          } else {
-            produtosVendidos[item.nome] = item.qtd;
-          }
-        });
-      });
-
-      const produtosMaisVendidos = Object.entries(produtosVendidos)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 3)
-        .map(([nome, quantidade]) => ({ nome, quantidade }));
+      const produtosMaisVendidos = processarProdutosMaisVendidos(vendas, produtos);
 
       // Cálculo de formas de pagamento
       const formasPagamento = {};
       vendas.forEach(venda => {
-        const metodo = venda.metodoPagamento;
+        const metodo = venda.metodoPagamento ? venda.metodoPagamento.toLowerCase() : 'desconhecido';
         formasPagamento[metodo] = (formasPagamento[metodo] || 0) + 1;
       });
 
@@ -76,7 +101,7 @@ export default function AdminRelatorios() {
       
     } catch (error) {
       console.error('Erro ao carregar dados dos relatórios:', error);
-      // Fallback para localStorage em caso de erro
+      setError(error.message);
       carregarDadosFallback();
     } finally {
       setLoading(false);
@@ -84,45 +109,57 @@ export default function AdminRelatorios() {
   };
 
   const carregarDadosFallback = () => {
-    // Fallback: carregar do localStorage se a API falhar
-    const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
-    
-    const receitaTotal = vendas.reduce((acc, venda) => acc + venda.total, 0);
-    const totalVendas = vendas.length;
-    const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
-    const produtosAtivos = produtos.length;
+    try {
+      // Fallback: carregar do localStorage se a API falhar
+      const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      
+      const receitaTotal = vendas.reduce((acc, venda) => acc + (venda.total || 0), 0);
+      const totalVendas = vendas.length;
+      const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
+      const produtosAtivos = produtos.length;
 
-    const produtosVendidos = {};
-    vendas.forEach(venda => {
-      venda.itens.forEach(item => {
-        if (produtosVendidos[item.nome]) {
-          produtosVendidos[item.nome] += item.qtd;
-        } else {
-          produtosVendidos[item.nome] = item.qtd;
+      // Cálculo de produtos mais vendidos (fallback)
+      const produtosVendidos = {};
+      vendas.forEach(venda => {
+        if (venda.itens) {
+          venda.itens.forEach(item => {
+            const nomeProduto = item.nome || `Produto ${item.id}`;
+            const quantidade = item.qtd || item.quantidade || 0;
+            
+            if (produtosVendidos[nomeProduto]) {
+              produtosVendidos[nomeProduto] += quantidade;
+            } else {
+              produtosVendidos[nomeProduto] = quantidade;
+            }
+          });
         }
       });
-    });
 
-    const produtosMaisVendidos = Object.entries(produtosVendidos)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 3)
-      .map(([nome, quantidade]) => ({ nome, quantidade }));
+      const produtosMaisVendidos = Object.entries(produtosVendidos)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 3)
+        .map(([nome, quantidade]) => ({ nome, quantidade }));
 
-    const formasPagamento = {};
-    vendas.forEach(venda => {
-      const metodo = venda.metodoPagamento;
-      formasPagamento[metodo] = (formasPagamento[metodo] || 0) + 1;
-    });
+      // Cálculo de formas de pagamento (fallback)
+      const formasPagamento = {};
+      vendas.forEach(venda => {
+        const metodo = venda.metodoPagamento || 'desconhecido';
+        formasPagamento[metodo] = (formasPagamento[metodo] || 0) + 1;
+      });
 
-    setDadosRelatorios({
-      receitaTotal,
-      totalVendas,
-      ticketMedio,
-      produtosAtivos,
-      produtosMaisVendidos,
-      formasPagamento
-    });
+      setDadosRelatorios({
+        receitaTotal,
+        totalVendas,
+        ticketMedio,
+        produtosAtivos,
+        produtosMaisVendidos,
+        formasPagamento
+      });
+    } catch (fallbackError) {
+      console.error('Erro no fallback:', fallbackError);
+      setError('Não foi possível carregar os dados');
+    }
   };
 
   const Card = ({ title, value, subtitle, icon }) => {
@@ -197,7 +234,7 @@ export default function AdminRelatorios() {
         </div>
         <div className="space-y-2">
           {Object.entries(dadosRelatorios.formasPagamento).map(([metodo, quantidade]) => {
-            const porcentagem = ((quantidade / totalVendas) * 100).toFixed(1);
+            const porcentagem = totalVendas > 0 ? ((quantidade / totalVendas) * 100).toFixed(1) : 0;
             return (
               <div key={metodo} className="flex justify-between items-center">
                 <span className="text-sm text-gray-600 capitalize">{metodo}</span>
@@ -233,17 +270,24 @@ export default function AdminRelatorios() {
           <h1 className="text-3xl font-bold mb-2">Relatórios</h1>
           <p className="text-gray-500">Análise de desempenho do negócio</p>
         </div>
-        <button 
-          onClick={carregarDadosRelatorios}
-          disabled={loading}
-          className="border border-gray-300 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition flex items-center gap-2 disabled:opacity-50"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M23 4v6h-6M1 20v-6h6"/>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-          </svg>
-          {loading ? 'Carregando...' : 'Atualizar'}
-        </button>
+        
+        <div className="flex items-center gap-4">
+          {error && (
+            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+              <AlertCircle size={16} />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+          
+          <button 
+            onClick={carregarDadosRelatorios}
+            disabled={loading}
+            className="border border-gray-300 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Carregando...' : 'Atualizar'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

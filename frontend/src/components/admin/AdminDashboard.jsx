@@ -1,8 +1,9 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, ShoppingCart, Users, Package } from "lucide-react";
+import { TrendingUp, ShoppingCart, Users, Package, RefreshCw, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import produtoService from '../../service/produtoService';
-import clienteService from '../../service/clienteService'; // NOVO IMPORT
+import clienteService from '../../service/clienteService'; 
+import vendaService from '../../service/vendaService'; 
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -14,58 +15,171 @@ export default function AdminDashboard() {
   });
 
   const [produtosEstoqueBaixo, setProdutosEstoqueBaixo] = useState([]);
+  const [vendasRecentes, setVendasRecentes] = useState([]);
+  const [dadosGrafico, setDadosGrafico] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
     carregarDadosDashboard();
   }, []);
 
+  const formatarData = (dataString) => {
+    if (!dataString) return 'Data inválida';
+    
+    try {
+      const data = new Date(dataString);
+      return data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dataString;
+    }
+  };
+
+  // Função para verificar se uma data é hoje
+  const isHoje = (dataString) => {
+    if (!dataString) return false;
+    
+    try {
+      const dataVenda = new Date(dataString);
+      const hoje = new Date();
+      
+      return dataVenda.toDateString() === hoje.toDateString();
+    } catch {
+      return false;
+    }
+  };
+
+  // Função para gerar dados do gráfico baseado nas vendas reais - CORRIGIDA A ORDEM
+  const gerarDadosGrafico = (vendas) => {
+    if (!vendas || vendas.length === 0) {
+      // Retorna dados vazios na ordem correta: Domingo a Sábado
+      return [
+        { name: "Dom", vendas: 0, dataCompleta: "Domingo" },
+        { name: "Seg", vendas: 0, dataCompleta: "Segunda-feira" },
+        { name: "Ter", vendas: 0, dataCompleta: "Terça-feira" },
+        { name: "Qua", vendas: 0, dataCompleta: "Quarta-feira" },
+        { name: "Qui", vendas: 0, dataCompleta: "Quinta-feira" },
+        { name: "Sex", vendas: 0, dataCompleta: "Sexta-feira" },
+        { name: "Sáb", vendas: 0, dataCompleta: "Sábado" }
+      ];
+    }
+
+    // Obter os últimos 7 dias começando do Domingo
+    const hoje = new Date();
+    const ultimos7Dias = [];
+    
+    // Encontrar o último Domingo
+    const ultimoDomingo = new Date(hoje);
+    ultimoDomingo.setDate(hoje.getDate() - hoje.getDay()); // Subtrai os dias desde o último Domingo
+    
+    // Gerar os 7 dias a partir do Domingo
+    for (let i = 0; i < 7; i++) {
+      const data = new Date(ultimoDomingo);
+      data.setDate(ultimoDomingo.getDate() + i);
+      ultimos7Dias.push(data.toDateString());
+    }
+
+    // Nomes dos dias da semana em português na ordem correta
+    const nomesDias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const nomesCompletos = [
+      'Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 
+      'Quinta-feira', 'Sexta-feira', 'Sábado'
+    ];
+
+    // Calcular vendas por dia na ordem correta
+    const vendasPorDia = ultimos7Dias.map((dataString, index) => {
+      const data = new Date(dataString);
+      const nomeDia = nomesDias[index];
+      const nomeCompleto = nomesCompletos[index];
+      
+      const vendasDoDia = vendas.filter(venda => {
+        const dataVenda = new Date(venda.createdAt || venda.data);
+        return dataVenda.toDateString() === dataString;
+      });
+
+      const totalVendas = vendasDoDia.reduce((acc, venda) => acc + (venda.total || 0), 0);
+
+      return {
+        name: nomeDia,
+        vendas: totalVendas,
+        dataCompleta: data.toLocaleDateString('pt-BR') + ` (${nomeCompleto})`
+      };
+    });
+
+    return vendasPorDia;
+  };
+
   const carregarDadosDashboard = async () => {
     try {
       setLoading(true);
+      setError(null);
+      setDebugInfo('Iniciando carregamento...');
       
-      // Carregar produtos da API
-      const responseProdutos = await produtoService.listarProdutos();
-      const produtos = responseProdutos.produtos || [];
-      
-      // CARREGAR CLIENTES DA API - NOVO
-      let totalClientes = 0;
-      try {
-        const responseClientes = await clienteService.listarClientes();
-        totalClientes = responseClientes.clientes ? responseClientes.clientes.length : 0;
-      } catch (error) {
-        console.error('Erro ao carregar clientes da API:', error);
-        // Fallback para localStorage se API falhar
-        const clientesLocal = JSON.parse(localStorage.getItem('clientes') || '[]');
-        totalClientes = clientesLocal.length;
-      }
-      
-      // Carregar vendas do localStorage (por enquanto)
-      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
-      
-      // Calcular vendas de hoje
-      const hoje = new Date().toDateString();
-      const vendasHoje = vendas.filter(venda => 
-        new Date(venda.data).toDateString() === hoje
-      );
-      
-      const receitaHoje = vendasHoje.reduce((acc, venda) => acc + venda.total, 0);
+      // Carregar dados em paralelo
+      const [produtosResponse, clientesResponse, vendasResponse] = await Promise.all([
+        produtoService.listarProdutos().catch(error => {
+          console.error('Erro ao carregar produtos:', error);
+          throw new Error('Erro ao carregar produtos');
+        }),
+        clienteService.listarClientes().catch(error => {
+          console.error('Erro ao carregar clientes:', error);
+          throw new Error('Erro ao carregar clientes');
+        }),
+        vendaService.listarVendas().catch(error => {
+          console.error('Erro ao carregar vendas:', error);
+          throw new Error('Erro ao carregar vendas');
+        })
+      ]);
+
+      const produtos = produtosResponse.produtos || [];
+      const clientes = clientesResponse.clientes || [];
+      const todasVendas = vendasResponse.vendas || vendasResponse || [];
+
+      // Filtrar vendas de HOJE
+      const vendasHoje = todasVendas.filter(venda => {
+        const dataVenda = venda.createdAt || venda.data;
+        return isHoje(dataVenda);
+      });
+
+      // Ordenar vendas por data (mais recentes primeiro) e pegar as 5 primeiras
+      const vendasRecentesOrdenadas = todasVendas
+        .sort((a, b) => new Date(b.createdAt || b.data) - new Date(a.createdAt || a.data))
+        .slice(0, 5);
+
+      // Gerar dados do gráfico com vendas reais
+      const dadosGraficoReais = gerarDadosGrafico(todasVendas);
+
+      // Calcular estatísticas
+      const receitaHoje = vendasHoje.reduce((acc, venda) => acc + (venda.total || 0), 0);
       const estoqueBaixo = produtos.filter(prod => prod.estoque <= 5).length;
       const produtosBaixo = produtos.filter(prod => prod.estoque <= 5);
+
+      // Atualizar info de debug
+      setDebugInfo(`Vendas: ${todasVendas.length} | Hoje: ${vendasHoje.length} | Receita: R$ ${receitaHoje.toFixed(2)}`);
 
       setStats({
         vendasHoje: vendasHoje.length,
         totalProdutos: produtos.length,
-        totalClientes: totalClientes, // AGORA VEM DA API
+        totalClientes: clientes.length,
         estoqueBaixo: estoqueBaixo,
         receitaTotal: receitaHoje
       });
 
       setProdutosEstoqueBaixo(produtosBaixo);
+      setVendasRecentes(vendasRecentesOrdenadas);
+      setDadosGrafico(dadosGraficoReais);
       
     } catch (error) {
       console.error('Erro ao carregar dados do dashboard:', error);
-      // Fallback completo para localStorage em caso de erro
+      setError(error.message);
+      setDebugInfo(`Erro: ${error.message}`);
       carregarDadosFallback();
     } finally {
       setLoading(false);
@@ -73,79 +187,67 @@ export default function AdminDashboard() {
   };
 
   const carregarDadosFallback = () => {
-    // Fallback: carregar do localStorage se a API falhar
-    const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
-    const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
-    const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
-    
-    const hoje = new Date().toDateString();
-    const vendasHoje = vendas.filter(venda => 
-      new Date(venda.data).toDateString() === hoje
-    );
-    
-    const receitaHoje = vendasHoje.reduce((acc, venda) => acc + venda.total, 0);
-    const estoqueBaixo = produtos.filter(prod => prod.estoque <= 5).length;
-    const produtosBaixo = produtos.filter(prod => prod.estoque <= 5);
+    try {
+      setDebugInfo('Usando fallback para localStorage...');
+      
+      // Fallback: carregar do localStorage se a API falhar
+      const produtos = JSON.parse(localStorage.getItem('produtos') || '[]');
+      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
+      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      
+      // Filtrar vendas de HOJE no fallback também
+      const vendasHoje = vendas.filter(venda => {
+        const dataVenda = venda.data || venda.createdAt;
+        return isHoje(dataVenda);
+      });
+      
+      const receitaHoje = vendasHoje.reduce((acc, venda) => acc + (venda.total || 0), 0);
+      const estoqueBaixo = produtos.filter(prod => prod.estoque <= 5).length;
+      const produtosBaixo = produtos.filter(prod => prod.estoque <= 5);
 
-    setStats({
-      vendasHoje: vendasHoje.length,
-      totalProdutos: produtos.length,
-      totalClientes: clientes.length,
-      estoqueBaixo: estoqueBaixo,
-      receitaTotal: receitaHoje
-    });
+      // Ordenar vendas para as recentes
+      const vendasRecentesFallback = vendas
+        .sort((a, b) => new Date(b.data || b.createdAt) - new Date(a.data || a.createdAt))
+        .slice(0, 5);
 
-    setProdutosEstoqueBaixo(produtosBaixo);
+      // Gerar dados do gráfico com fallback
+      const dadosGraficoFallback = gerarDadosGrafico(vendas);
+
+      setDebugInfo(`Fallback - Vendas: ${vendas.length} | Hoje: ${vendasHoje.length}`);
+
+      setStats({
+        vendasHoje: vendasHoje.length,
+        totalProdutos: produtos.length,
+        totalClientes: clientes.length,
+        estoqueBaixo: estoqueBaixo,
+        receitaTotal: receitaHoje
+      });
+
+      setProdutosEstoqueBaixo(produtosBaixo);
+      setVendasRecentes(vendasRecentesFallback);
+      setDadosGrafico(dadosGraficoFallback);
+    } catch (fallbackError) {
+      console.error('Erro no fallback:', fallbackError);
+      setError('Não foi possível carregar os dados');
+      setDebugInfo('Erro no fallback');
+    }
   };
 
-  // Inicializar dados básicos se não existirem
-  useEffect(() => {
-    const inicializarDadosBasicos = () => {
-      // Inicializar clientes se não existirem (apenas localStorage)
-      const clientes = JSON.parse(localStorage.getItem('clientes') || '[]');
-      if (clientes.length === 0) {
-        const clientesIniciais = [
-          {
-            id: 1,
-            nome: "João Silva",
-            cpf: "123.456.789-00",
-            telefone: "(11) 98765-4321",
-            email: "joao@email.com",
-          },
-          {
-            id: 2,
-            nome: "Maria Santos",
-            cpf: "987.654.321-00",
-            telefone: "(11) 91234-5678",
-            email: "maria@email.com",
-          },
-        ];
-        localStorage.setItem('clientes', JSON.stringify(clientesIniciais));
-      }
-
-      // Inicializar vendas se não existirem
-      const vendas = JSON.parse(localStorage.getItem('vendas') || '[]');
-      if (vendas.length === 0) {
-        localStorage.setItem('vendas', JSON.stringify([]));
-      }
-
-      // Recarregar dados após inicialização
-      carregarDadosDashboard();
-    };
-
-    inicializarDadosBasicos();
-  }, []);
-
-  // Dados para o gráfico (baseados nas vendas da semana)
-  const dadosGrafico = [
-    { name: "Seg", vendas: 1200 },
-    { name: "Ter", vendas: 1900 },
-    { name: "Qua", vendas: 1500 },
-    { name: "Qui", vendas: 2100 },
-    { name: "Sex", vendas: 2500 },
-    { name: "Sáb", vendas: 2200 },
-    { name: "Dom", vendas: 1800 },
-  ];
+  // Tooltip customizado para o gráfico
+  const CustomTooltip = ({ active, payload}) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-white p-3 border border-gray-300 rounded-lg shadow-lg">
+          <p className="font-semibold text-gray-900">{data.dataCompleta}</p>
+          <p className="text-blue-600 font-bold">
+            R$ {payload[0].value.toFixed(2)}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   if (loading) {
     return (
@@ -160,10 +262,38 @@ export default function AdminDashboard() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 overflow-y-auto p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Visão geral do seu negócio</p>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-gray-600">Visão geral do seu negócio</p>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {error && (
+            <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+              <AlertCircle size={16} />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+          
+          <button 
+            onClick={carregarDadosDashboard}
+            disabled={loading}
+            className="border border-gray-300 px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition flex items-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Carregando...' : 'Atualizar'}
+          </button>
+        </div>
       </div>
+
+      {/* Debug Info - Sempre visível para troubleshooting */}
+      {debugInfo && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 className="text-sm font-semibold text-blue-800 mb-1">Informações de Carregamento:</h4>
+          <p className="text-xs text-blue-600">{debugInfo}</p>
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -204,23 +334,45 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Resto do código permanece igual... */}
       {/* Gráfico e Alertas */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Gráfico de Vendas */}
+        {/* Gráfico de Vendas - AGORA NA ORDEM CORRETA */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vendas da Semana</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Vendas da Semana</h3>
+            <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              Total: R$ {dadosGrafico.reduce((acc, dia) => acc + dia.vendas, 0).toFixed(2)}
+            </span>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={dadosGrafico}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip 
-                formatter={(value) => [`R$ ${value}`, 'Vendas']}
-                labelFormatter={(label) => `Dia: ${label}`}
+              <XAxis 
+                dataKey="name" 
+                axisLine={false}
+                tickLine={false}
               />
-              <Bar dataKey="vendas" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+              <YAxis 
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `R$ ${value}`}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar 
+                dataKey="vendas" 
+                fill="#3b82f6" 
+                radius={[6, 6, 0, 0]}
+                name="Vendas"
+              />
             </BarChart>
           </ResponsiveContainer>
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-500">
+              {dadosGrafico.some(dia => dia.vendas > 0) 
+                ? 'Dados baseados em vendas da semana atual' 
+                : 'Nenhuma venda registrada na semana atual'
+              }
+            </p>
+          </div>
         </div>
 
         {/* Alertas Rápidos */}
@@ -257,13 +409,12 @@ export default function AdminDashboard() {
                 <div>
                   <p className="font-medium text-orange-800">Sem Produtos</p>
                   <p className="text-sm text-orange-600">
-                    Nenhum produto cadastrado via API
+                    Nenhum produto cadastrado no sistema
                   </p>
                 </div>
               </div>
             )}
 
-            {/* NOVO ALERTA PARA CLIENTES */}
             {stats.totalClientes === 0 && (
               <div className="flex items-start space-x-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
                 <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
@@ -291,7 +442,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Resto do código permanece igual... */}
+     
       {/* Produtos com Estoque Baixo */}
       {produtosEstoqueBaixo.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
@@ -312,7 +463,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="mt-2 pt-2 border-t border-yellow-200">
                   <p className="text-sm text-gray-700">
-                    Preço: <span className="font-semibold">R$ {produto.preco.toFixed(2)}</span>
+                    Preço: <span className="font-semibold">R$ {produto.preco?.toFixed(2) || '0.00'}</span>
                   </p>
                 </div>
               </div>
@@ -336,30 +487,36 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {JSON.parse(localStorage.getItem('vendas') || '[]')
-                .slice(0, 5)
-                .map((venda, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-50">
-                    <td className="p-3 font-medium">#{venda.id}</td>
-                    <td className="p-3 text-sm text-gray-600">{venda.data}</td>
-                    <td className="p-3 text-sm">{venda.itens.length} itens</td>
-                    <td className="p-3 font-semibold">R$ {venda.total.toFixed(2)}</td>
+              {vendasRecentes.map((venda, index) => {
+                const isVendaHoje = isHoje(venda.createdAt || venda.data);
+                return (
+                  <tr key={venda.id || index} className={`border-b hover:bg-gray-50 ${isVendaHoje ? 'bg-blue-50' : ''}`}>
+                    <td className="p-3 font-medium">
+                      #{venda.id || `TEMP-${index + 1}`}
+                      {isVendaHoje && <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-1 rounded">Hoje</span>}
+                    </td>
+                    <td className="p-3 text-sm text-gray-600">
+                      {formatarData(venda.createdAt || venda.data)}
+                    </td>
+                    <td className="p-3 text-sm">{venda.itens ? venda.itens.length : 0} itens</td>
+                    <td className="p-3 font-semibold">R$ {venda.total ? venda.total.toFixed(2) : '0.00'}</td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        venda.metodoPagamento === 'dinheiro' 
+                        venda.metodoPagamento === 'DINHEIRO' || venda.metodoPagamento === 'dinheiro' 
                           ? 'bg-blue-100 text-blue-800'
-                          : venda.metodoPagamento === 'cartao'
+                          : venda.metodoPagamento === 'CARTAO' || venda.metodoPagamento === 'cartao'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-yellow-100 text-yellow-800'
                       }`}>
-                        {venda.metodoPagamento}
+                        {venda.metodoPagamento ? venda.metodoPagamento.toLowerCase() : 'N/A'}
                       </span>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
             </tbody>
           </table>
-          {JSON.parse(localStorage.getItem('vendas') || '[]').length === 0 && (
+          {vendasRecentes.length === 0 && (
             <p className="text-gray-500 text-center py-8">Nenhuma venda registrada</p>
           )}
         </div>

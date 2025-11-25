@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import logo from '../../assets/logo.png';
 import produtoService from '../../service/produtoService';
+import vendaService from '../../service/vendaService';
+import clienteService from '../../service/clienteService';
 
 function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const [produtos, setProdutos] = useState([]);
@@ -16,12 +18,28 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
   const [loading, setLoading] = useState(true);
   const [caixaAberto, setCaixaAberto] = useState(true);
+  
+  // Estados para o modal de cliente
+  const [showClienteModal, setShowClienteModal] = useState(false);
+  const [clientes, setClientes] = useState([]);
+  const [buscaCliente, setBuscaCliente] = useState("");
+  const [showAddCliente, setShowAddCliente] = useState(false);
+  const [novoCliente, setNovoCliente] = useState({
+    nome: '',
+    cpfCnpj: '',
+    telefone: '',
+    email: '',
+    endereco: ''
+  });
+  const [clienteSelecionado, setClienteSelecionado] = useState(null);
+  const [isFinalizandoVenda, setIsFinalizandoVenda] = useState(false);
 
   // Carregar produtos da API e vendas do localStorage
   useEffect(() => {
     carregarProdutos();
     carregarVendasRecentes();
     verificarCaixaAberto();
+    carregarClientes();
   }, []);
 
   const verificarCaixaAberto = () => {
@@ -48,22 +66,41 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     }
   };
 
-  const carregarVendasRecentes = () => {
+  const carregarClientes = async () => {
+    try {
+      const response = await clienteService.listarClientes();
+      setClientes(response.clientes || []);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+    }
+  };
 
-    const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
-    
-    const hoje = new Date().toLocaleDateString('pt-BR');
-    const vendasDoDia = vendasSalvas.filter(venda => {
-      const dataVenda = new Date(venda.data.split(', ')[0]).toLocaleDateString('pt-BR');
-      return dataVenda === hoje;
-    });
-    
-    setHistoricoVendas(vendasDoDia.slice(0, 5));
+  const carregarVendasRecentes = async () => {
+    try {
+      const response = await vendaService.getVendasDoDia();
+      const vendasDoDia = response.vendas || [];
+      setHistoricoVendas(vendasDoDia.slice(0, 5));
+    } catch (error) {
+      console.error('Erro ao carregar vendas da API:', error);
+      const vendasSalvas = JSON.parse(localStorage.getItem('vendas') || '[]');
+      const hoje = new Date().toLocaleDateString('pt-BR');
+      const vendasDoDia = vendasSalvas.filter(venda => {
+        const dataVenda = new Date(venda.data.split(', ')[0]).toLocaleDateString('pt-BR');
+        return dataVenda === hoje;
+      });
+      setHistoricoVendas(vendasDoDia.slice(0, 5));
+    }
   };
 
   const produtosFiltrados = produtos.filter(p =>
     p.nome.toLowerCase().includes(busca.toLowerCase()) || 
     p.codigo.includes(busca)
+  );
+
+  const clientesFiltrados = clientes.filter(c =>
+    c.nome.toLowerCase().includes(buscaCliente.toLowerCase()) ||
+    c.cpfCnpj?.includes(buscaCliente) ||
+    c.telefone?.includes(buscaCliente)
   );
 
   const adicionarCarrinho = (produto) => {
@@ -114,50 +151,149 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       ? (Number(valorRecebido) - total).toFixed(2)
       : 0;
 
-  const finalizarVenda = async () => {
+  // Função para abrir modal de cliente antes de finalizar venda
+  const abrirModalCliente = () => {
+    if (carrinho.length === 0) {
+      alert("Adicione itens ao carrinho antes de finalizar a venda!");
+      return;
+    }
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
       alert("Valor recebido insuficiente!");
       return;
     }
+    setShowClienteModal(true);
+  };
+
+  // Função para selecionar cliente
+  const selecionarCliente = (cliente) => {
+    setClienteSelecionado(cliente);
+  };
+
+  // Função para continuar sem cliente
+  const continuarSemCliente = () => {
+    setClienteSelecionado(null);
+    criarVenda();
+  };
+
+  // Função para adicionar novo cliente
+  const adicionarNovoCliente = async () => {
+    if (!novoCliente.nome) {
+      alert("Nome é obrigatório!");
+      return;
+    }
+
+    try {
+      const response = await clienteService.criarCliente(novoCliente);
+      const clienteCriado = response.cliente;
+      
+      // Recarregar lista de clientes
+      await carregarClientes();
+      
+      // Selecionar o cliente recém-criado
+      setClienteSelecionado(clienteCriado);
+      
+      // Limpar formulário
+      setNovoCliente({
+        nome: '',
+        cpfCnpj: '',
+        telefone: '',
+        email: '',
+        endereco: ''
+      });
+      setShowAddCliente(false);
+      
+    } catch (error) {
+      console.error('Erro ao criar cliente:', error);
+      alert('Erro ao criar cliente. Tente novamente.');
+    }
+  };
+
+  // Função principal para criar a venda
+  const criarVenda = async () => {
+    // Prevenir múltiplos cliques
+    if (isFinalizandoVenda) return;
+    
+    setIsFinalizandoVenda(true);
 
     const vendaId = Math.floor(1000 + Math.random() * 9000);
-    const novaVenda = {
+
+    // Dados básicos da venda (backup local)
+    const dadosVendaBasica = {
       id: vendaId,
       data: new Date().toLocaleString('pt-BR'),
       itens: [...carrinho],
-      total: total,
-      metodoPagamento: metodoPagamento,
+      total,
+      metodoPagamento,
       valorRecebido: metodoPagamento === "dinheiro" ? Number(valorRecebido) : total,
       troco: metodoPagamento === "dinheiro" ? troco : 0,
-      operador: user.nome
+      operador: user.nome,
+      usuarioId: user.id || 1,
+      clienteId: clienteSelecionado?.id ?? null,
+      cliente: clienteSelecionado
+        ? {
+            nome: clienteSelecionado.nome,
+            cpfCnpj: clienteSelecionado.cpfCnpj
+          }
+        : null
     };
 
-    // Salvar venda no localStorage
-    const vendasExistentes = JSON.parse(localStorage.getItem('vendas') || '[]');
-    const novasVendas = [novaVenda, ...vendasExistentes];
-    localStorage.setItem('vendas', JSON.stringify(novasVendas));
-
-    // Atualizar estoque dos produtos na API
     try {
+      // ===== FORMATAR DADOS PARA API =====
+      const dadosParaAPI = await vendaService.formatarDadosVenda(
+        {
+          ...dadosVendaBasica,
+          clienteId: clienteSelecionado?.id ?? null // garante envio correto
+        },
+        user
+      );
+
+      // ===== SALVAR NA API =====
+      await vendaService.criarVenda(dadosParaAPI);
+
+      // ===== BACKUP LOCAL =====
+      const vendasExistentes = JSON.parse(localStorage.getItem('vendas') || '[]');
+      const novasVendas = [dadosVendaBasica, ...vendasExistentes];
+      localStorage.setItem('vendas', JSON.stringify(novasVendas));
+
+      // ===== ATUALIZAR ESTOQUE NA API =====
       for (const itemCarrinho of carrinho) {
         const produto = produtos.find(p => p.id === itemCarrinho.id);
+
         if (produto) {
           const novoEstoque = produto.estoque - itemCarrinho.qtd;
+
           await produtoService.atualizarProduto(produto.id, {
             ...produto,
             estoque: novoEstoque
           });
         }
       }
-      
+
       await carregarProdutos();
+      
+      // ===== FECHAR MODAL =====
+      setShowClienteModal(false);
+      setClienteSelecionado(null);
+
     } catch (error) {
-      console.error('Erro ao atualizar estoque:', error);
-      alert('Venda registrada, mas houve erro ao atualizar estoque na API');
+      console.error("Erro ao salvar venda na API:", error);
+
+      // ===== BACKUP LOCAL EM CASO DE FALHA =====
+      const vendasExistentes = JSON.parse(localStorage.getItem('vendas') || '[]');
+      const novasVendas = [dadosVendaBasica, ...vendasExistentes];
+      localStorage.setItem('vendas', JSON.stringify(novasVendas));
+
+      setShowClienteModal(false);
+      setClienteSelecionado(null);
+    } finally {
+      // Sempre liberar o estado de loading
+      setIsFinalizandoVenda(false);
     }
 
-    setHistoricoVendas(prev => [novaVenda, ...prev.slice(0, 4)]);
-    
+    // ===== HISTÓRICO LOCAL =====
+    setHistoricoVendas(prev => [dadosVendaBasica, ...prev.slice(0, 4)]);
+
+    // ===== RESETAR CAMPOS =====
     setCarrinho([]);
     setValorRecebido("");
   };
@@ -173,7 +309,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     try {
       const token = localStorage.getItem('token');
       
-      // Tentar fechar caixa no backend
       const response = await fetch('http://localhost:3333/api/caixa/fechar', {
         method: 'POST',
         headers: {
@@ -189,7 +324,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         const errorData = await response.json().catch(() => null);
         const errorMessage = errorData?.error || 'Erro ao fechar caixa';
         
-        // Se não há caixa aberto, fechar localmente
         if (errorMessage.includes('Nenhum caixa aberto encontrado')) {
           console.warn('Nenhum caixa aberto encontrado no backend. Fechando localmente.');
           fecharCaixaLocalmente();
@@ -198,13 +332,10 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         throw new Error(errorMessage);
       }
 
-      // Sucesso no backend
       localStorage.setItem('caixaAberto', 'false');
       setCaixaAberto(false);
-      
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
-      
       alert('Caixa fechado com sucesso no sistema!');
       
       if (onFecharCaixa) {
@@ -213,8 +344,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
     } catch (error) {
       console.error('Erro ao fechar caixa:', error);
-      
-      // Fallback: fechar caixa localmente
       if (error.message.includes('Nenhum caixa aberto encontrado') || error.message.includes('Failed to fetch')) {
         fecharCaixaLocalmente();
       } else {
@@ -229,11 +358,9 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     localStorage.setItem('caixaAberto', 'false');
     setCaixaAberto(false);
     
-    // Calcular totais das vendas do dia
     const vendasDoDia = JSON.parse(localStorage.getItem('vendas') || '[]');
     const totalVendas = vendasDoDia.reduce((acc, venda) => acc + venda.total, 0);
     
-    // Salvar relatório do caixa
     const relatorioCaixa = {
       data: new Date().toLocaleString('pt-BR'),
       saldoFinal: parseFloat(saldoFinal),
@@ -248,7 +375,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     
     setShowFecharCaixaModal(false);
     setSaldoFinal('');
-    
     alert('Caixa fechado localmente! Total de vendas: R$ ' + totalVendas.toFixed(2));
     
     if (onFecharCaixa) {
@@ -275,7 +401,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         setCaixaAberto(true);
         alert('Caixa aberto com sucesso no sistema!');
       } else {
-        // Se der erro no backend, abrir localmente
         abrirCaixaLocalmente();
       }
     } catch (error) {
@@ -304,7 +429,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const ImagemProduto = ({ produto }) => {
     const [erroImagem, setErroImagem] = useState(false);
     
-    // Se não tem imagem ou deu erro, mostrar placeholder
     if (!produto.imagem || erroImagem) {
       return (
         <div className="w-full h-32 bg-gray-200 rounded mb-3 flex items-center justify-center">
@@ -313,7 +437,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       );
     }
 
-    // Verificar se é URL externa ou local
     const isExternalUrl = produto.imagem.startsWith('http');
     const imageUrl = isExternalUrl 
       ? produto.imagem 
@@ -392,6 +515,21 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     </svg>
   );
 
+  const UserIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+  );
+
+  const UserPlusIcon = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M19 8v6M22 11h-6"/>
+    </svg>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -427,7 +565,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
             </div>
           )}
                   
-          {/* Botão Finalizar Caixa */}
           {caixaAberto ? (
             <button 
               onClick={() => setShowFecharCaixaModal(true)}
@@ -472,7 +609,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
                     : 'border-gray-300 hover:bg-gray-50 hover:border-blue-500'
                 }`}
               >
-                {/* CORREÇÃO: Componente de imagem */}
                 <ImagemProduto produto={prod} />
                 
                 <p className="font-semibold text-gray-900 mb-1">{prod.nome}</p>
@@ -612,11 +748,18 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
               <div className="space-y-2">
                 <button
-                  onClick={finalizarVenda}
-                  disabled={carrinho.length === 0 || (precisaValorRecebido && Number(valorRecebido) < total)}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition duration-200"
+                  onClick={abrirModalCliente}
+                  disabled={carrinho.length === 0 || (precisaValorRecebido && Number(valorRecebido) < total) || isFinalizandoVenda}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-semibold transition duration-200 flex items-center justify-center gap-2"
                 >
-                  Finalizar Venda (F2)
+                  {isFinalizandoVenda ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Processando...
+                    </>
+                  ) : (
+                    'Finalizar Venda (F2)'
+                  )}
                 </button>
 
                 <button 
@@ -624,7 +767,8 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
                     setCarrinho([]);
                     setValorRecebido("");
                   }}
-                  className="w-full bg-gray-300 hover:bg-gray-400 p-3 rounded-lg font-semibold transition duration-200"
+                  disabled={isFinalizandoVenda}
+                  className="w-full bg-gray-300 hover:bg-gray-400 disabled:bg-gray-400 p-3 rounded-lg font-semibold transition duration-200"
                 >
                   Cancelar (ESC)
                 </button>
@@ -663,6 +807,219 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
           )}
         </div>
       </div>
+
+      {/* Modal de Seleção de Cliente */}
+      {showClienteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center border-b p-4">
+              <h3 className="text-lg font-bold">Selecionar Cliente</h3>
+              <button 
+                onClick={() => {
+                  setShowClienteModal(false);
+                  setShowAddCliente(false);
+                  setBuscaCliente("");
+                }}
+                className="text-gray-500 hover:text-gray-700"
+                disabled={isFinalizandoVenda}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              {!showAddCliente ? (
+                // Tela de seleção de cliente
+                <div className="space-y-4">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <SearchIcon />
+                    </div>
+                    <input
+                      placeholder="Buscar por nome, CPF ou telefone..."
+                      value={buscaCliente}
+                      onChange={(e) => setBuscaCliente(e.target.value)}
+                      className="w-full border border-gray-300 p-3 rounded-lg pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isFinalizandoVenda}
+                    />
+                  </div>
+
+                  <div className="border rounded-lg max-h-64 overflow-y-auto">
+                    <div className="p-4 space-y-2">
+                      {clientesFiltrados.length === 0 ? (
+                        <p className="text-center text-gray-500 py-8">
+                          Nenhum cliente encontrado
+                        </p>
+                      ) : (
+                        clientesFiltrados.map(cliente => (
+                          <button
+                            key={cliente.id}
+                            onClick={() => selecionarCliente(cliente)}
+                            disabled={isFinalizandoVenda}
+                            className={`w-full text-left p-3 rounded-lg border transition duration-200 ${
+                              clienteSelecionado?.id === cliente.id 
+                                ? 'bg-blue-50 border-blue-500' 
+                                : 'border-gray-200 hover:bg-gray-50'
+                            } ${isFinalizandoVenda ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <UserIcon />
+                              <div className="flex-1">
+                                <p className="font-semibold">{cliente.nome}</p>
+                                <p className="text-sm text-gray-600">
+                                  CPF: {cliente.cpfCnpj || 'Não informado'} | Tel: {cliente.telefone || 'Não informado'}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowAddCliente(true)}
+                      disabled={isFinalizandoVenda}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-medium transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      <UserPlusIcon /> Adicionar Novo Cliente
+                    </button>
+                    <button
+                      onClick={continuarSemCliente}
+                      disabled={isFinalizandoVenda}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-medium transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      {isFinalizandoVenda ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Processando...
+                        </>
+                      ) : (
+                        'Continuar Sem Cliente'
+                      )}
+                    </button>
+                  </div>
+
+                  {clienteSelecionado && (
+                    <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                      <p className="text-green-800 font-semibold text-center">
+                        Cliente selecionado: {clienteSelecionado.nome}
+                      </p>
+                      <button
+                        onClick={criarVenda}
+                        disabled={isFinalizandoVenda}
+                        className="w-full mt-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white p-2 rounded-lg font-semibold transition duration-200 flex items-center justify-center gap-2"
+                      >
+                        {isFinalizandoVenda ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Processando...
+                          </>
+                        ) : (
+                          'Confirmar Venda com este Cliente'
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Tela de adicionar novo cliente
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-lg">Adicionar Novo Cliente</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1">Nome Completo *</label>
+                      <input
+                        type="text"
+                        value={novoCliente.nome}
+                        onChange={(e) => setNovoCliente({...novoCliente, nome: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Nome completo"
+                        required
+                        disabled={isFinalizandoVenda}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">CPF/CNPJ</label>
+                      <input
+                        type="text"
+                        value={novoCliente.cpfCnpj}
+                        onChange={(e) => setNovoCliente({...novoCliente, cpfCnpj: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        disabled={isFinalizandoVenda}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Telefone</label>
+                      <input
+                        type="text"
+                        value={novoCliente.telefone}
+                        onChange={(e) => setNovoCliente({...novoCliente, telefone: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="(11) 99999-9999"
+                        disabled={isFinalizandoVenda}
+                      />
+                    </div>
+                    
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1">E-mail</label>
+                      <input
+                        type="email"
+                        value={novoCliente.email}
+                        onChange={(e) => setNovoCliente({...novoCliente, email: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="cliente@email.com"
+                        disabled={isFinalizandoVenda}
+                      />
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1">Endereço</label>
+                      <input
+                        type="text"
+                        value={novoCliente.endereco}
+                        onChange={(e) => setNovoCliente({...novoCliente, endereco: e.target.value})}
+                        className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Rua, número, bairro, cidade"
+                        disabled={isFinalizandoVenda}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowAddCliente(false)}
+                      disabled={isFinalizandoVenda}
+                      className="flex-1 bg-gray-300 hover:bg-gray-400 disabled:bg-gray-400 text-gray-800 p-3 rounded-lg font-medium transition duration-200"
+                    >
+                      Voltar
+                    </button>
+                    <button
+                      onClick={adicionarNovoCliente}
+                      disabled={!novoCliente.nome || isFinalizandoVenda}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded-lg font-medium transition duration-200 flex items-center justify-center gap-2"
+                    >
+                      {isFinalizandoVenda ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          Processando...
+                        </>
+                      ) : (
+                        'Adicionar e Continuar'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Popup de Detalhes da Venda */}
       {vendaSelecionada && (

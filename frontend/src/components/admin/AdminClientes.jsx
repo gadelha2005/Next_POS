@@ -27,7 +27,6 @@ export default function AdminClientes() {
       setCustomers(response.clientes || []);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
-      alert('Erro ao carregar clientes: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -88,7 +87,6 @@ export default function AdminClientes() {
       fecharModal();
     } catch (error) {
       console.error('Erro ao salvar cliente:', error);
-      alert('Erro ao salvar cliente: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -101,10 +99,8 @@ export default function AdminClientes() {
         // Por enquanto, apenas removemos da lista local
         const novosClientes = customers.filter(c => c.id !== customerId);
         setCustomers(novosClientes);
-        alert('Cliente removido da lista (DELETE não implementado no backend)');
       } catch (error) {
         console.error('Erro ao excluir cliente:', error);
-        alert('Erro ao excluir cliente: ' + error.message);
       }
     }
   };
