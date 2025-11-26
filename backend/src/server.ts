@@ -1,4 +1,3 @@
-// server.ts
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -15,9 +14,8 @@ import emailService from "./service/emailService";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3333;
 
-// CORS mais permissivo para desenvolvimento
+// CORS configurado para produção
 app.use(
   cors({
     origin: [
@@ -25,6 +23,7 @@ app.use(
       "http://127.0.0.1:5173",
       "http://localhost:5174",
       "http://127.0.0.1:5174",
+      "https://your-frontend-domain.vercel.app" // ADICIONE SEU DOMÍNIO DO FRONTEND AQUI
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -74,10 +73,12 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Rota não encontrada" });
 });
 
+// O Vercel define a porta automaticamente
+const PORT = process.env.PORT || 3333;
+
 // Inicializar servidor
 app.listen(PORT, async () => {
   console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Banco de dados: ${process.env.DB_NAME}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 
   // Inicializar banco de dados
@@ -86,3 +87,5 @@ app.listen(PORT, async () => {
   // Verificação silenciosa do serviço de email
   await emailService.verifyConnection();
 });
+
+export default app;
