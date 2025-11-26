@@ -15,7 +15,7 @@ import emailService from "./service/emailService";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3333;
 
 // CORS mais permissivo para desenvolvimento
 app.use(

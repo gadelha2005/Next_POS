@@ -371,7 +371,7 @@ export default function AdminDashboard() {
           <p className="text-xs text-gray-400 mt-1">Cadastrados no sistema</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 'p-6 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <p className="text-gray-600 font-medium">Clientes</p>
             <Users className="text-purple-500" size={20} />
