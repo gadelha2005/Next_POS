@@ -19,7 +19,7 @@ class ImageSearchService {
         throw new Error(`Open Food Facts API error: ${response.status}`);
       }
       
-      const data = await response.json();
+      const data = await response.json() as any;
       
       // Se busca por código de barras
       if (codigoBarras && data.product) {
