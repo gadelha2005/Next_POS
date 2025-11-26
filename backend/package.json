@@ -7,8 +7,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
-    "prisma:generate": "prisma generate",
-    "prisma:dbpush": "prisma db push"
+    "vercel-build": "prisma generate && tsc"
   },
   "dependencies": {
     "@prisma/client": "^6.17.1",
