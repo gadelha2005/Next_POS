@@ -1,8 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import vendaService from '../../service/vendaService';
 
 function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
-    const [valorInicial, setValorInicial] = useState('500.00'); // Valor padrão
+    const [valorInicial, setValorInicial] = useState('500.00');
     const [isLoading, setIsLoading] = useState(false);
+    const [verificandoCaixa, setVerificandoCaixa] = useState(true);
+
+    // Verificar se já existe caixa aberto ao carregar o componente
+    useEffect(() => {
+        verificarCaixaExistente();
+    }, []);
+
+    const verificarCaixaExistente = async () => {
+        try {
+            const caixaAtivo = await vendaService.obterCaixaAtivo();
+            
+            if (caixaAtivo && caixaAtivo.status === 'aberto') {
+                console.log('Caixa já está aberto, passando direto...');
+                // Caixa já está aberto, passar direto
+                localStorage.setItem('caixaAberto', 'true');
+                localStorage.setItem('saldoInicial', caixaAtivo.valorInicial?.toString() || '500.00');
+                onAberturaSuccess();
+                return;
+            }
+        } catch (error) {
+            console.error('Erro ao verificar caixa:', error);
+            // Fallback: verificar localStorage
+            const caixaLocal = localStorage.getItem('caixaAberto');
+            if (caixaLocal === 'true') {
+                console.log('Caixa aberto no localStorage, passando direto...');
+                onAberturaSuccess();
+                return;
+            }
+        } finally {
+            setVerificandoCaixa(false);
+        }
+    };
 
     const handleAbrirCaixa = async () => {
         if (!valorInicial || isNaN(valorInicial) || parseFloat(valorInicial) <= 0) {
@@ -14,11 +47,9 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
         try {
             const token = localStorage.getItem('token');
             
-            
             const requestBody = {
                 valorInicial: parseFloat(valorInicial) 
             };
-
 
             const response = await fetch('http://localhost:3333/api/caixa/abrir', {
                 method: 'POST',
@@ -32,19 +63,54 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => null);
                 const errorMessage = errorData?.error || 'Erro ao abrir caixa';
-                throw new Error(JSON.stringify(errorData) || errorMessage);
+                
+                // Se o erro for "caixa já aberto", tratar como sucesso
+                if (errorMessage.includes('já existe um caixa aberto') || 
+                    errorMessage.includes('Já existe um caixa aberto')) {
+                    console.log('Caixa já estava aberto no backend, continuando...');
+                    localStorage.setItem('caixaAberto', 'true');
+                    localStorage.setItem('saldoInicial', valorInicial);
+                    onAberturaSuccess();
+                    return;
+                }
+                
+                throw new Error(errorMessage);
             }
 
-            // Sucesso - atualizar localStorage e chamar callback
+            // Sucesso normal
+            console.log('Caixa aberto com sucesso');
             localStorage.setItem('caixaAberto', 'true');
             localStorage.setItem('saldoInicial', valorInicial);
-            
             onAberturaSuccess();
 
         } catch (error) {
             console.error('Erro ao abrir caixa:', error);
-        } 
-        finally {
+            
+            // Em caso de erro, tentar abrir localmente
+            try {
+                console.log('Tentando abrir caixa localmente...');
+                localStorage.setItem('caixaAberto', 'true');
+                localStorage.setItem('saldoInicial', valorInicial);
+                
+                // Criar registro local do caixa
+                const caixaLocal = {
+                    id: Date.now(),
+                    valorInicial: parseFloat(valorInicial),
+                    dataAbertura: new Date().toISOString(),
+                    usuario: user.nome,
+                    status: 'aberto',
+                    abertoLocalmente: true
+                };
+                
+                const caixasExistentes = JSON.parse(localStorage.getItem('caixasLocais') || '[]');
+                localStorage.setItem('caixasLocais', JSON.stringify([caixaLocal, ...caixasExistentes]));
+                
+                onAberturaSuccess();
+            } catch (localError) {
+                console.error('Erro ao abrir caixa localmente:', localError);
+                alert('Erro ao abrir caixa. Tente novamente.');
+            }
+        } finally {
             setIsLoading(false);
         }
     };
@@ -56,6 +122,32 @@ function AberturaCaixaAdmin({ user, onAberturaSuccess, onVoltarMenu }) {
     const handleClose = () => {
         handleVoltarMenu();
     };
+
+    // Mostrar loading enquanto verifica o caixa
+    if (verificandoCaixa) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
+                <div className="sm:mx-auto sm:w-full sm:max-w-md">
+                    <div className="flex justify-center">
+                        <img 
+                            src="/src/assets/logo.png" 
+                            alt="Logo Next Pos" 
+                            className="h-16 w-16"
+                        />
+                    </div>
+                    
+                    <h1 className="text-3xl font-bold text-center text-gray-900 mb-2">
+                        Abertura de Caixa - Admin
+                    </h1>
+                    
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-4 text-gray-600">Verificando status do caixa...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">

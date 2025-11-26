@@ -55,6 +55,11 @@ class VendaService {
     return this.request(`/vendas?${params}`);
   }
 
+  async listarVendasParaDashboard() {
+    const hoje = new Date().toISOString().split('T')[0];
+    return this.request(`/vendas?dataInicio=${hoje}&dataFim=${hoje}&limite=1000`);
+  }
+
   async buscarVenda(id) {
     return this.request(`/vendas/${id}`);
   }

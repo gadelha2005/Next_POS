@@ -734,7 +734,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
               )}
 
               <div className="space-y-2">
-                {/* CORREÇÃO 2: Botão com loading para prevenir múltiplos cliques */}
+                {/* Botão com loading para prevenir múltiplos cliques */}
                 <button
                   onClick={abrirModalCliente}
                   disabled={carrinho.length === 0 || (precisaValorRecebido && Number(valorRecebido) < total) || isFinalizandoVenda}
@@ -773,30 +773,37 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
               </h2>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {historicoVendas.slice(0, 5).map(venda => (
-                  <div 
-                    key={venda.id} 
-                    onClick={() => abrirDetalhesVenda(venda)}
-                    className="flex justify-between items-center text-sm border-b pb-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition duration-200"
-                  >
-                    <div>
-                      <p className="font-medium">Venda #{venda.id}</p>
-                      <p className="text-gray-500">{venda.data.split(' ')[1]}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-green-600">R$ {venda.total.toFixed(2)}</p>
-                      <p className="text-gray-500 text-xs flex items-center gap-1">
-                        <EyeIcon /> {venda.metodoPagamento}
-                      </p>
-                    </div>
+                <div 
+                  key={venda.id} 
+                  onClick={() => abrirDetalhesVenda(venda)}
+                  className="flex justify-between items-center text-sm border-b pb-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition duration-200"
+                >
+                  <div>
+                    <p className="font-medium">Venda #{venda.id}</p>
+                    <p className="text-gray-500 text-xs">
+                      {venda.data.split(' ')[1]}
+                      {venda.cliente && (
+                        <span className="block text-blue-600 font-medium mt-1">
+                          Cliente: {venda.cliente.nome}
+                        </span>
+                      )}
+                    </p>
                   </div>
-                ))}
+                  <div className="text-right">
+                    <p className="font-bold text-green-600">R$ {venda.total.toFixed(2)}</p>
+                    <p className="text-gray-500 text-xs flex items-center gap-1">
+                      <EyeIcon /> {venda.metodoPagamento}
+                    </p>
+                  </div>
+                </div>
+              ))}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Modal de Seleção de Cliente - COM CORREÇÕES APLICADAS */}
+      {/* Modal de Seleção de Cliente */}
       {showClienteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
@@ -819,7 +826,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
               {!showAddCliente ? (
                 // Tela de seleção de cliente
                 <div className="space-y-4">
-                  {/* CORREÇÃO 1: Ícone de busca de clientes centralizado */}
+                  {/* Ícone de busca de clientes centralizado */}
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <SearchIcon />
@@ -875,7 +882,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
                       <UserPlusIcon /> Adicionar Novo Cliente
                     </button>
                     
-                    {/* CORREÇÃO 2: Botão com loading state */}
+                    {/* Botão com loading state */}
                     <button
                       onClick={continuarSemCliente}
                       disabled={isFinalizandoVenda}
@@ -898,7 +905,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
                         Cliente selecionado: {clienteSelecionado.nome}
                       </p>
                       
-                      {/* CORREÇÃO 2: Botão com loading state */}
+                      {/* Botão com loading state */}
                       <button
                         onClick={criarVenda}
                         disabled={isFinalizandoVenda}
@@ -993,7 +1000,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
                       Voltar
                     </button>
                     
-                    {/* CORREÇÃO 2: Botão com loading state */}
+                    {/* Botão com loading state */}
                     <button
                       onClick={adicionarNovoCliente}
                       disabled={!novoCliente.nome || isFinalizandoVenda}
@@ -1016,7 +1023,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
         </div>
       )}
 
-      {/* Popup de Detalhes da Venda - mantido igual */}
+      {/* Popup de Detalhes da Venda */}
       {vendaSelecionada && (
         <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -1048,6 +1055,19 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
                   <p className="text-gray-600">Valor Recebido</p>
                   <p className="font-medium">R$ {vendaSelecionada.valorRecebido.toFixed(2)}</p>
                 </div>
+                {vendaSelecionada.cliente && (
+                  <div className="col-span-2">
+                    <p className="text-gray-600">Cliente</p>
+                    <p className="font-medium">
+                      {vendaSelecionada.cliente.nome}
+                      {vendaSelecionada.cliente.cpfCnpj && (
+                        <span className="text-gray-500 text-sm block">
+                          CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>

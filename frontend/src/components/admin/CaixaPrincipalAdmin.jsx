@@ -154,7 +154,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   // Função para abrir modal de cliente antes de finalizar venda
   const abrirModalCliente = () => {
     if (carrinho.length === 0) {
-      alert("Adicione itens ao carrinho antes de finalizar a venda!");
       return;
     }
     if (metodoPagamento === "dinheiro" && Number(valorRecebido) < total) {
@@ -178,7 +177,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   // Função para adicionar novo cliente
   const adicionarNovoCliente = async () => {
     if (!novoCliente.nome) {
-      alert("Nome é obrigatório!");
       return;
     }
 
@@ -300,7 +298,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
 
   const handleFecharCaixa = async () => {
     if (!saldoFinal || isNaN(saldoFinal) || parseFloat(saldoFinal) < 0) {
-      alert('Por favor, informe um saldo final válido');
       return;
     }
 
@@ -336,7 +333,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       setCaixaAberto(false);
       setShowFecharCaixaModal(false);
       setSaldoFinal('');
-      alert('Caixa fechado com sucesso no sistema!');
       
       if (onFecharCaixa) {
         onFecharCaixa();
@@ -399,7 +395,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
       if (response.ok) {
         localStorage.setItem('caixaAberto', 'true');
         setCaixaAberto(true);
-        alert('Caixa aberto com sucesso no sistema!');
       } else {
         abrirCaixaLocalmente();
       }
@@ -412,7 +407,6 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const abrirCaixaLocalmente = () => {
     localStorage.setItem('caixaAberto', 'true');
     setCaixaAberto(true);
-    alert('Caixa aberto localmente!');
   };
 
   const precisaValorRecebido = metodoPagamento === "dinheiro";
@@ -776,7 +770,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
             </div>
           </div>
 
-          {/* Histórico de Vendas */}
+          {/* Histórico de Vendas - ALTERADO: Mostrar nome do cliente */}
           {historicoVendas.length > 0 && (
             <div className="bg-white p-4 rounded-lg shadow">
               <h2 className="font-bold text-lg mb-4 border-b pb-2 flex items-center gap-2">
@@ -792,7 +786,14 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
                   >
                     <div>
                       <p className="font-medium">Venda #{venda.id}</p>
-                      <p className="text-gray-500">{venda.data.split(' ')[1]}</p>
+                      <p className="text-gray-500 text-xs">
+                        {venda.data.split(' ')[1]}
+                        {venda.cliente && (
+                          <span className="block text-blue-600 font-medium mt-1">
+                            Cliente: {venda.cliente.nome}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-green-600">R$ {venda.total.toFixed(2)}</p>
@@ -1021,7 +1022,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
         </div>
       )}
 
-      {/* Popup de Detalhes da Venda */}
+      {/* Popup de Detalhes da Venda - ALTERADO: Mostrar dados do cliente */}
       {vendaSelecionada && (
         <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -1053,6 +1054,19 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
                   <p className="text-gray-600">Valor Recebido</p>
                   <p className="font-medium">R$ {vendaSelecionada.valorRecebido.toFixed(2)}</p>
                 </div>
+                {vendaSelecionada.cliente && (
+                  <div className="col-span-2">
+                    <p className="text-gray-600">Cliente</p>
+                    <p className="font-medium">
+                      {vendaSelecionada.cliente.nome}
+                      {vendaSelecionada.cliente.cpfCnpj && (
+                        <span className="text-gray-500 text-sm block">
+                          CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>

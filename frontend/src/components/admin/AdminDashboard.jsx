@@ -1,5 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, ShoppingCart, Users, Package, RefreshCw, AlertCircle } from "lucide-react";
+import { TrendingUp, ShoppingCart, Users, Package, RefreshCw, AlertCircle, Eye, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import produtoService from '../../service/produtoService';
 import clienteService from '../../service/clienteService'; 
@@ -20,6 +20,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [debugInfo, setDebugInfo] = useState('');
+  const [vendaSelecionada, setVendaSelecionada] = useState(null);
+  const [showDetalhesVenda, setShowDetalhesVenda] = useState(false);
 
   useEffect(() => {
     carregarDadosDashboard();
@@ -231,6 +233,18 @@ export default function AdminDashboard() {
       setError('Não foi possível carregar os dados');
       setDebugInfo('Erro no fallback');
     }
+  };
+
+  // Função para abrir detalhes da venda
+  const abrirDetalhesVenda = (venda) => {
+    setVendaSelecionada(venda);
+    setShowDetalhesVenda(true);
+  };
+
+  // Função para fechar detalhes da venda
+  const fecharDetalhesVenda = () => {
+    setShowDetalhesVenda(false);
+    setVendaSelecionada(null);
   };
 
   // Tooltip customizado para o gráfico
@@ -484,6 +498,7 @@ export default function AdminDashboard() {
                 <th className="p-3">Itens</th>
                 <th className="p-3">Total</th>
                 <th className="p-3">Pagamento</th>
+                <th className="p-3">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -511,6 +526,15 @@ export default function AdminDashboard() {
                         {venda.metodoPagamento ? venda.metodoPagamento.toLowerCase() : 'N/A'}
                       </span>
                     </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => abrirDetalhesVenda(venda)}
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        <Eye size={14} />
+                        Detalhes
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -521,6 +545,103 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Popup de Detalhes da Venda */}
+      {showDetalhesVenda && vendaSelecionada && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b p-4">
+              <h3 className="text-lg font-bold">Detalhes da Venda #{vendaSelecionada.id}</h3>
+              <button 
+                onClick={fecharDetalhesVenda}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-600">Data e Hora</p>
+                  <p className="font-medium">{formatarData(vendaSelecionada.createdAt || vendaSelecionada.data)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Operador</p>
+                  <p className="font-medium">{vendaSelecionada.usuario?.nome ?? 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Método de Pagamento</p>
+                  <p className="font-medium capitalize">{vendaSelecionada.metodoPagamento || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Valor Recebido</p>
+                  <p className="font-medium">R$ {vendaSelecionada.valorRecebido ? vendaSelecionada.valorRecebido.toFixed(2) : '0.00'}</p>
+                </div>
+                {vendaSelecionada.cliente && (
+                  <div className="col-span-2">
+                    <p className="text-gray-600">Cliente</p>
+                    <p className="font-medium">
+                      {vendaSelecionada.cliente.nome}
+                      {vendaSelecionada.cliente.cpfCnpj && (
+                        <span className="text-gray-500 text-sm block">
+                          CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="font-semibold mb-2">Itens da Venda</h4>
+                <div className="space-y-2">
+                  {vendaSelecionada.itens && vendaSelecionada.itens.length > 0 ? (
+                    vendaSelecionada.itens.map((item, index) => (
+                      <div key={index} className="flex justify-between items-center border-b pb-2">
+                        <div>
+                          <p className="font-medium">{item.nome}</p>
+                          <p className="text-gray-500 text-sm">
+                            {item.qtd || item.quantidade || 1} x R$ {item.preco ? item.preco.toFixed(2) : '0.00'}
+                          </p>
+                        </div>
+                        <p className="font-semibold">
+                          R$ {((item.qtd || item.quantidade || 1) * (item.preco || 0)).toFixed(2)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">Nenhum item encontrado</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
+                </div>
+                {vendaSelecionada.metodoPagamento === "dinheiro" && vendaSelecionada.valorRecebido && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>Valor Recebido:</span>
+                      <span>R$ {vendaSelecionada.valorRecebido.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-green-600">
+                      <span>Troco:</span>
+                      <span>R$ {vendaSelecionada.troco ? vendaSelecionada.troco.toFixed(2) : '0.00'}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between font-bold text-lg border-t pt-2">
+                  <span>Total:</span>
+                  <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
