@@ -3,6 +3,8 @@ import logo from '../../assets/logo.png';
 import produtoService from '../../service/produtoService';
 import vendaService from '../../service/vendaService';
 import clienteService from '../../service/clienteService';
+import ReciboService from '../../service/reciboService';
+import { Download } from "lucide-react";
 
 function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const [produtos, setProdutos] = useState([]);
@@ -18,6 +20,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
   const [isFechandoCaixa, setIsFechandoCaixa] = useState(false);
   const [loading, setLoading] = useState(true);
   const [caixaAberto, setCaixaAberto] = useState(true);
+  const [baixandoRecibo, setBaixandoRecibo] = useState(false);
   
   // Estados para o modal de cliente
   const [showClienteModal, setShowClienteModal] = useState(false);
@@ -41,6 +44,44 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     verificarCaixaAberto();
     carregarClientes();
   }, []);
+
+  const baixarRecibo = async (venda) => {
+    try {
+      setBaixandoRecibo(true);
+      
+      const dadosVendaRecibo = {
+        id: venda.id,
+        numero: venda.id,
+        data: venda.data,
+        createdAt: venda.data,
+        itens: venda.itens || [],
+        total: venda.total || 0,
+        subtotal: venda.total || 0,
+        desconto: venda.desconto || 0,
+        metodoPagamento: venda.metodoPagamento || 'N/A',
+        valorRecebido: venda.valorRecebido || venda.total || 0,
+        troco: venda.troco || 0,
+        operador: venda.operador || user.nome,
+        usuario: { nome: venda.operador || user.nome },
+        user: { nome: venda.operador || user.nome },
+        cliente: venda.cliente || null
+      };
+
+      const sucesso = ReciboService.gerarRecibo(dadosVendaRecibo);
+      
+      if (sucesso) {
+        console.log('Recibo baixado com sucesso');
+      } else {
+        console.error('Erro ao baixar recibo');
+        alert('Erro ao baixar recibo. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao baixar recibo:', error);
+      alert('Erro ao baixar recibo: ' + error.message);
+    } finally {
+      setBaixandoRecibo(false);
+    }
+  };
 
   const verificarCaixaAberto = () => {
     const caixaStatus = localStorage.getItem('caixaAberto');
@@ -1025,96 +1066,117 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
 
       {/* Popup de Detalhes da Venda */}
       {vendaSelecionada && (
-        <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b p-4">
-              <h3 className="text-lg font-bold">Detalhes da Venda #{vendaSelecionada.id}</h3>
-              <button 
-                onClick={fecharDetalhesVenda}
-                className="text-gray-500 hover:text-gray-700"
+      <div className="fixed inset-0 bg-black bg-opacity-25 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center border-b p-4">
+            <h3 className="text-lg font-bold">Detalhes da Venda #{vendaSelecionada.id}</h3>
+            <button 
+              onClick={fecharDetalhesVenda}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          
+          <div className="p-4 space-y-4">
+            {/* Botão de Baixar Recibo - ADICIONADO */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => baixarRecibo(vendaSelecionada)}
+                disabled={baixandoRecibo}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition duration-200 flex items-center gap-2"
               >
-                <CloseIcon />
-              </button>
-            </div>
-            
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-600">Data e Hora</p>
-                  <p className="font-medium">{vendaSelecionada.data}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Operador</p>
-                  <p className="font-medium">{vendaSelecionada.operador}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Método de Pagamento</p>
-                  <p className="font-medium capitalize">{vendaSelecionada.metodoPagamento}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Valor Recebido</p>
-                  <p className="font-medium">R$ {vendaSelecionada.valorRecebido.toFixed(2)}</p>
-                </div>
-                {vendaSelecionada.cliente && (
-                  <div className="col-span-2">
-                    <p className="text-gray-600">Cliente</p>
-                    <p className="font-medium">
-                      {vendaSelecionada.cliente.nome}
-                      {vendaSelecionada.cliente.cpfCnpj && (
-                        <span className="text-gray-500 text-sm block">
-                          CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2">Itens da Venda</h4>
-                <div className="space-y-2">
-                  {vendaSelecionada.itens.map((item, index) => (
-                    <div key={index} className="flex justify-between items-center border-b pb-2">
-                      <div>
-                        <p className="font-medium">{item.nome}</p>
-                        <p className="text-gray-500 text-sm">
-                          {item.qtd} x R$ {item.preco.toFixed(2)}
-                        </p>
-                      </div>
-                      <p className="font-semibold">
-                        R$ {(item.qtd * item.preco).toFixed(2)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>R$ {vendaSelecionada.total.toFixed(2)}</span>
-                </div>
-                {vendaSelecionada.metodoPagamento === "dinheiro" && (
+                {baixandoRecibo ? (
                   <>
-                    <div className="flex justify-between">
-                      <span>Valor Recebido:</span>
-                      <span>R$ {vendaSelecionada.valorRecebido.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-green-600">
-                      <span>Troco:</span>
-                      <span>R$ {vendaSelecionada.troco}</span>
-                    </div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download size={16} />
+                    Baixar Recibo
                   </>
                 )}
-                <div className="flex justify-between font-bold text-lg border-t pt-2">
-                  <span>Total:</span>
-                  <span>R$ {vendaSelecionada.total.toFixed(2)}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-600">Data e Hora</p>
+                <p className="font-medium">{vendaSelecionada.data}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Operador</p>
+                <p className="font-medium">{vendaSelecionada.operador}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Método de Pagamento</p>
+                <p className="font-medium capitalize">{vendaSelecionada.metodoPagamento}</p>
+              </div>
+              <div>
+                <p className="text-gray-600">Valor Recebido</p>
+                <p className="font-medium">R$ {vendaSelecionada.valorRecebido.toFixed(2)}</p>
+              </div>
+              {vendaSelecionada.cliente && (
+                <div className="col-span-2">
+                  <p className="text-gray-600">Cliente</p>
+                  <p className="font-medium">
+                    {vendaSelecionada.cliente.nome}
+                    {vendaSelecionada.cliente.cpfCnpj && (
+                      <span className="text-gray-500 text-sm block">
+                        CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
+                      </span>
+                    )}
+                  </p>
                 </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-2">Itens da Venda</h4>
+              <div className="space-y-2">
+                {vendaSelecionada.itens.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center border-b pb-2">
+                    <div>
+                      <p className="font-medium">{item.nome}</p>
+                      <p className="text-gray-500 text-sm">
+                        {item.qtd} x R$ {item.preco.toFixed(2)}
+                      </p>
+                    </div>
+                    <p className="font-semibold">
+                      R$ {(item.qtd * item.preco).toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t pt-4 space-y-2">
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span>R$ {vendaSelecionada.total.toFixed(2)}</span>
+              </div>
+              {vendaSelecionada.metodoPagamento === "dinheiro" && (
+                <>
+                  <div className="flex justify-between">
+                    <span>Valor Recebido:</span>
+                    <span>R$ {vendaSelecionada.valorRecebido.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-green-600">
+                    <span>Troco:</span>
+                    <span>R$ {vendaSelecionada.troco}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-bold text-lg border-t pt-2">
+                <span>Total:</span>
+                <span>R$ {vendaSelecionada.total.toFixed(2)}</span>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* Modal de Fechar Caixa - mantido igual */}
       {showFecharCaixaModal && (

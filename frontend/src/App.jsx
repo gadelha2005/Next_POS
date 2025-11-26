@@ -96,12 +96,15 @@ function App() {
         const token = localStorage.getItem('token');
         const savedUser = localStorage.getItem('user');
         
+        // Se não tem token ou usuário, vai para login
         if (!token || !savedUser) {
+            console.log('Não encontrou token ou usuário no localStorage');
             setIsLoading(false);
             return;
         }
 
         try {
+            console.log('Verificando autenticação com token...');
             const response = await fetch('http://localhost:3333/api/auth/profile', {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -111,15 +114,21 @@ function App() {
             if (response.ok) {
                 const data = await response.json();
                 const userData = data.user;
+                console.log('Usuário autenticado:', userData);
+                
                 setUser(userData);
                 setIsAuthenticated(true);
 
+                // Se for caixa, verifica status do caixa
                 if (userData.role === 'caixa') {
+                    console.log('É caixa, verificando status...');
                     await checkCaixaStatus(token);
                 } else {
+                    console.log('É admin, carregamento completo');
                     setIsLoading(false);
                 }
             } else {
+                console.log('Token inválido, fazendo logout');
                 logout();
             }
         } catch (error) {
@@ -147,7 +156,7 @@ function App() {
         } catch (error) {
             console.error('Erro ao verificar caixa:', error);
         } finally {
-            setIsLoading(false);
+            setIsLoading(false); // CORREÇÃO: Garantir que loading sempre pare
         }
     };
 

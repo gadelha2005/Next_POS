@@ -8,6 +8,7 @@ import produtoRoutes from "./routes/produtoRoutes"
 import initDatabase from "./script/init-database";
 import clienteRoutes from './routes/clienteRoutes';
 import vendaRoutes from './routes/vendaRoutes';
+import configuracaoRoutes from './routes/configuracaoRoutes';
 import path from "path";
 import emailService from "./service/emailService";
 
@@ -41,7 +42,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/produtos", produtoRoutes);
 app.use('/api/clientes', clienteRoutes);
-app.use("/api/vendas" , vendaRoutes)
+app.use("/api/vendas" , vendaRoutes);
+app.use('/api/configuracoes', configuracaoRoutes);
 
 // Rota de saúde
 app.get("/health", (req, res) => {

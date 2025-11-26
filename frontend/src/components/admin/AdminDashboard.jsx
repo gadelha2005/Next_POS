@@ -1,9 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingUp, ShoppingCart, Users, Package, RefreshCw, AlertCircle, Eye, X } from "lucide-react";
+import { TrendingUp, ShoppingCart, Users, Package, RefreshCw, AlertCircle, Eye, X, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import produtoService from '../../service/produtoService';
 import clienteService from '../../service/clienteService'; 
 import vendaService from '../../service/vendaService'; 
+import ReciboService from '../../service/reciboService';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -22,10 +23,51 @@ export default function AdminDashboard() {
   const [debugInfo, setDebugInfo] = useState('');
   const [vendaSelecionada, setVendaSelecionada] = useState(null);
   const [showDetalhesVenda, setShowDetalhesVenda] = useState(false);
+  const [baixandoRecibo, setBaixandoRecibo] = useState(false);
 
   useEffect(() => {
     carregarDadosDashboard();
   }, []);
+
+  const baixarRecibo = async (venda) => {
+    try {
+      setBaixandoRecibo(true);
+      
+      // Formatar os dados da venda para o recibo
+      const dadosVendaRecibo = {
+        id: venda.id,
+        numero: venda.id,
+        data: venda.createdAt || venda.data,
+        createdAt: venda.createdAt || venda.data,
+        itens: venda.itens || [],
+        total: venda.total || 0,
+        subtotal: venda.total || 0,
+        desconto: venda.desconto || 0,
+        metodoPagamento: venda.metodoPagamento || 'N/A',
+        valorRecebido: venda.valorRecebido || venda.total || 0,
+        troco: venda.troco || 0,
+        operador: venda.usuario?.nome || venda.operador || 'Operador',
+        usuario: venda.usuario || { nome: 'Operador' },
+        user: venda.user || { nome: 'Operador' },
+        cliente: venda.cliente || null
+      };
+
+      // Gerar o recibo
+      const sucesso = await ReciboService.gerarRecibo(dadosVendaRecibo);
+      
+      if (sucesso) {
+        console.log('Recibo baixado com sucesso');
+      } else {
+        console.error('Erro ao baixar recibo');
+        alert('Erro ao baixar recibo. Tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao baixar recibo:', error);
+      alert('Erro ao baixar recibo: ' + error.message);
+    } finally {
+      setBaixandoRecibo(false);
+    }
+  };
 
   const formatarData = (dataString) => {
     if (!dataString) return 'Data inválida';
@@ -301,10 +343,10 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Debug Info - Sempre visível para troubleshooting */}
+      
       {debugInfo && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="text-sm font-semibold text-blue-800 mb-1">Informações de Carregamento:</h4>
+          <h4 className="text-sm font-semibold text-blue-800 mb-1">Informações do Sistema</h4>
           <p className="text-xs text-blue-600">{debugInfo}</p>
         </div>
       )}
@@ -329,7 +371,7 @@ export default function AdminDashboard() {
           <p className="text-xs text-gray-400 mt-1">Cadastrados no sistema</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 'p-6 flex flex-col">
           <div className="flex items-center justify-between mb-3">
             <p className="text-gray-600 font-medium">Clientes</p>
             <Users className="text-purple-500" size={20} />
@@ -547,101 +589,122 @@ export default function AdminDashboard() {
       </div>
 
       {/* Popup de Detalhes da Venda */}
-      {showDetalhesVenda && vendaSelecionada && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b p-4">
-              <h3 className="text-lg font-bold">Detalhes da Venda #{vendaSelecionada.id}</h3>
-              <button 
-                onClick={fecharDetalhesVenda}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
+       {showDetalhesVenda && vendaSelecionada && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center border-b p-4">
+          <h3 className="text-lg font-bold">Detalhes da Venda #{vendaSelecionada.id}</h3>
+          <button 
+            onClick={fecharDetalhesVenda}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Botão de Baixar Recibo */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => baixarRecibo(vendaSelecionada)}
+              disabled={baixandoRecibo}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg font-medium transition duration-200 flex items-center gap-2"
+            >
+              {baixandoRecibo ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  Baixar Recibo
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-gray-600">Data e Hora</p>
+              <p className="font-medium">{formatarData(vendaSelecionada.createdAt || vendaSelecionada.data)}</p>
             </div>
-            
-            <div className="p-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-600">Data e Hora</p>
-                  <p className="font-medium">{formatarData(vendaSelecionada.createdAt || vendaSelecionada.data)}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Operador</p>
-                  <p className="font-medium">{vendaSelecionada.usuario?.nome ?? 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Método de Pagamento</p>
-                  <p className="font-medium capitalize">{vendaSelecionada.metodoPagamento || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600">Valor Recebido</p>
-                  <p className="font-medium">R$ {vendaSelecionada.valorRecebido ? vendaSelecionada.valorRecebido.toFixed(2) : '0.00'}</p>
-                </div>
-                {vendaSelecionada.cliente && (
-                  <div className="col-span-2">
-                    <p className="text-gray-600">Cliente</p>
-                    <p className="font-medium">
-                      {vendaSelecionada.cliente.nome}
-                      {vendaSelecionada.cliente.cpfCnpj && (
-                        <span className="text-gray-500 text-sm block">
-                          CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
-                        </span>
-                      )}
+            <div>
+              <p className="text-gray-600">Operador</p>
+              <p className="font-medium">{vendaSelecionada.usuario?.nome ?? 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Método de Pagamento</p>
+              <p className="font-medium capitalize">{vendaSelecionada.metodoPagamento || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-gray-600">Valor Recebido</p>
+              <p className="font-medium">R$ {vendaSelecionada.valorRecebido ? vendaSelecionada.valorRecebido.toFixed(2) : '0.00'}</p>
+            </div>
+            {vendaSelecionada.cliente && (
+              <div className="col-span-2">
+                <p className="text-gray-600">Cliente</p>
+                <p className="font-medium">
+                  {vendaSelecionada.cliente.nome}
+                  {vendaSelecionada.cliente.cpfCnpj && (
+                    <span className="text-gray-500 text-sm block">
+                      CPF/CNPJ: {vendaSelecionada.cliente.cpfCnpj}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h4 className="font-semibold mb-2">Itens da Venda</h4>
+            <div className="space-y-2">
+              {vendaSelecionada.itens && vendaSelecionada.itens.length > 0 ? (
+                vendaSelecionada.itens.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center border-b pb-2">
+                    <div>
+                      <p className="font-medium">{item.produto?.nome || item.nome}</p>
+                      <p className="text-gray-500 text-sm">
+                        {item.quantidade || item.qtd || 1} x R$ {item.precoUnitario || item.preco || 0}
+                      </p>
+                    </div>
+                    <p className="font-semibold">
+                      R$ {((item.quantidade || item.qtd || 1) * (item.precoUnitario || item.preco || 0)).toFixed(2)}
                     </p>
                   </div>
-                )}
-              </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">Nenhum item encontrado</p>
+              )}
+            </div>
+          </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">Itens da Venda</h4>
-                <div className="space-y-2">
-                  {vendaSelecionada.itens && vendaSelecionada.itens.length > 0 ? (
-                    vendaSelecionada.itens.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center border-b pb-2">
-                        <div>
-                          <p className="font-medium">{item.nome}</p>
-                          <p className="text-gray-500 text-sm">
-                            {item.qtd || item.quantidade || 1} x R$ {item.preco ? item.preco.toFixed(2) : '0.00'}
-                          </p>
-                        </div>
-                        <p className="font-semibold">
-                          R$ {((item.qtd || item.quantidade || 1) * (item.preco || 0)).toFixed(2)}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">Nenhum item encontrado</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-2">
+          <div className="border-t pt-4 space-y-2">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
+            </div>
+            {vendaSelecionada.metodoPagamento === "dinheiro" && vendaSelecionada.valorRecebido && (
+              <>
                 <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
+                  <span>Valor Recebido:</span>
+                  <span>R$ {vendaSelecionada.valorRecebido.toFixed(2)}</span>
                 </div>
-                {vendaSelecionada.metodoPagamento === "dinheiro" && vendaSelecionada.valorRecebido && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Valor Recebido:</span>
-                      <span>R$ {vendaSelecionada.valorRecebido.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-green-600">
-                      <span>Troco:</span>
-                      <span>R$ {vendaSelecionada.troco ? vendaSelecionada.troco.toFixed(2) : '0.00'}</span>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between font-bold text-lg border-t pt-2">
-                  <span>Total:</span>
-                  <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
+                <div className="flex justify-between font-bold text-green-600">
+                  <span>Troco:</span>
+                  <span>R$ {vendaSelecionada.troco ? vendaSelecionada.troco.toFixed(2) : '0.00'}</span>
                 </div>
-              </div>
+              </>
+            )}
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
+              <span>Total:</span>
+              <span>R$ {vendaSelecionada.total ? vendaSelecionada.total.toFixed(2) : '0.00'}</span>
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
-  );
+  )}
+</div>
+);
 }
