@@ -14,9 +14,20 @@ dotenv.config();
 
 const app = express();
 
-// CORS MANUAL - GARANTIDO FUNCIONAR
+const allowedOrigins = [
+  'http://localhost:5173',           // Local development
+  'http://localhost:3000',           // Caso rode em outra porta
+  'https://next-pos-frontend.vercel.app',  // Seu frontend em produção
+  'https://next-pos-frontend-vercel.app'   // Se tiver variações
+];
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
