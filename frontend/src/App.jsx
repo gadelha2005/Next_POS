@@ -105,7 +105,7 @@ function App() {
 
         try {
             console.log('Verificando autenticação com token...');
-            const response = await fetch('http://localhost:3333/api/auth/profile', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -139,7 +139,7 @@ function App() {
 
     const checkCaixaStatus = async (token) => {
         try {
-            const response = await fetch('http://localhost:3333/api/caixa/status', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/caixa/status`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
