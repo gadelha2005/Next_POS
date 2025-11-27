@@ -1,5 +1,4 @@
-// src/service/usuarioService.js
-const API_BASE_URL = 'http://localhost:3333/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333';
 
 class UsuarioService {
   getToken() {
@@ -13,7 +12,7 @@ class UsuarioService {
       throw new Error('Token de autenticação não encontrado');
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${API_BASE_URL}/api${endpoint}`;
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -48,9 +47,6 @@ class UsuarioService {
     }
   }
 
-  // ===== MÉTODOS BASEADOS NAS ROTAS EXISTENTES =====
-
-  // GET /auth/profile - Obter perfil do usuário logado
   async getPerfilUsuario() {
     try {
       const response = await this.request('/auth/profile');
@@ -58,7 +54,6 @@ class UsuarioService {
     } catch (error) {
       console.error('Erro ao buscar perfil do usuário:', error);
       
-      // Fallback para localStorage
       const userLocalStorage = JSON.parse(localStorage.getItem('user') || 'null');
       if (userLocalStorage) {
         return { user: userLocalStorage };
@@ -68,7 +63,6 @@ class UsuarioService {
     }
   }
 
-  // POST /auth/register - Registrar novo usuário
   async criarUsuario(usuarioData) {
     try {
       const response = await this.request('/auth/register', {
@@ -83,7 +77,6 @@ class UsuarioService {
     }
   }
 
-  // POST /auth/login - Login de usuário
   async login(credenciais) {
     try {
       const response = await this.request('/auth/login', {
@@ -91,7 +84,6 @@ class UsuarioService {
         body: credenciais
       });
       
-      // Salvar token e usuário no localStorage
       if (response.token && response.user) {
         localStorage.setItem('token', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
@@ -104,7 +96,6 @@ class UsuarioService {
     }
   }
 
-  // POST /auth/forgot-password - Esqueci a senha
   async esqueciSenha(email) {
     try {
       const response = await this.request('/auth/forgot-password', {
@@ -119,7 +110,6 @@ class UsuarioService {
     }
   }
 
-  // POST /auth/reset-password - Redefinir senha
   async redefinirSenha(token, novaSenha) {
     try {
       const response = await this.request('/auth/reset-password', {
@@ -134,45 +124,30 @@ class UsuarioService {
     }
   }
 
-  // ===== MÉTODOS AUXILIARES =====
-
-  // Logout
   logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
   }
 
-  // Verificar se usuário está autenticado
   isAuthenticated() {
     return !!this.getToken();
   }
 
-  // Obter usuário do localStorage
   getUsuarioLocal() {
     const user = localStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   }
 
-  // ===== MÉTODO PARA DASHBOARD (FALLBACK) =====
-  
-  // Método para obter dados de usuários para o dashboard
-  // Como não há endpoint para listar todos os usuários, usamos fallback
   async obterUsuariosParaDashboard() {
     try {
-      // Tenta obter o perfil do usuário logado
       const perfil = await this.getPerfilUsuario();
-      
-      // Se for admin, poderia tentar buscar outros usuários
-      // Mas como não há endpoint, retornamos apenas o usuário logado
       return {
         usuarios: [perfil.user]
       };
-      
     } catch (error) {
       console.error('Erro ao obter usuários para dashboard:', error);
       
-      // Fallback completo - usar localStorage
       const userLocal = this.getUsuarioLocal();
       const usuariosFallback = userLocal ? [userLocal] : [];
       

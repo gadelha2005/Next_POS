@@ -351,7 +351,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
         valorFinal: parseFloat(saldoFinal)
       };
 
-      const response = await fetch('http://localhost:3333/api/caixa/fechar', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/caixa/fechar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -461,7 +461,7 @@ function CaixaPrincipalScreen({ user, onLogout, onFecharCaixa }) {
     const isExternalUrl = produto.imagem.startsWith('http');
     const imageUrl = isExternalUrl 
       ? produto.imagem 
-      : `http://localhost:3333${produto.imagem}`;
+      : `${import.meta.env.VITE_API_URL}${produto.imagem}`;
 
     return (
       <img 

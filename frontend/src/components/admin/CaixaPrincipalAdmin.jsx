@@ -347,7 +347,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await fetch('http://localhost:3333/api/caixa/fechar', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/caixa/fechar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -422,7 +422,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
   const abrirCaixa = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:3333/api/caixa/abrir', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/caixa/abrir`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -475,7 +475,7 @@ function CaixaPrincipalAdmin({ user, onFecharCaixa }) {
     const isExternalUrl = produto.imagem.startsWith('http');
     const imageUrl = isExternalUrl 
       ? produto.imagem 
-      : `http://localhost:3333${produto.imagem}`;
+      : `${import.meta.env.VITE_API_URL}${produto.imagem}`;
 
     return (
       <img 
