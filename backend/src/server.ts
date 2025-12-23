@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoute";
 import caixaRoutes from "./routes/caixaRoutes";
@@ -15,21 +14,30 @@ dotenv.config();
 
 const app = express();
 
-// CORS configurado para produção
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "http://localhost:5174",
-      "http://127.0.0.1:5174",
-      "https://your-frontend-domain.vercel.app" // ADICIONE SEU DOMÍNIO DO FRONTEND AQUI
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+const allowedOrigins = [
+  'http://localhost:5173',           // Local development
+  'http://localhost:3000',           // Caso rode em outra porta
+  'https://next-pos-frontend.vercel.app',  // Seu frontend em produção
+  'https://next-pos-frontend-vercel.app'   // Se tiver variações
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 app.use(express.json());
 
@@ -73,10 +81,8 @@ app.use("*", (req, res) => {
   res.status(404).json({ error: "Rota não encontrada" });
 });
 
-// O Vercel define a porta automaticamente
 const PORT = process.env.PORT || 3333;
 
-// Inicializar servidor
 app.listen(PORT, async () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);

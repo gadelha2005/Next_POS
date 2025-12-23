@@ -1,5 +1,4 @@
-// src/service/vendaService.js
-const API_BASE_URL = 'http://localhost:3333/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333';
 
 class VendaService {
   getToken() {
@@ -13,7 +12,7 @@ class VendaService {
       throw new Error('Token de autenticação não encontrado');
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${API_BASE_URL}/api${endpoint}`;
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -48,9 +47,7 @@ class VendaService {
     }
   }
 
-  // ===== CRUD DE VENDAS =====
   async listarVendas(filtros = {}) {
-    // REMOVER limite padrão para pegar TODAS as vendas
     const params = new URLSearchParams(filtros).toString();
     return this.request(`/vendas?${params}`);
   }
@@ -90,7 +87,6 @@ class VendaService {
     });
   }
 
-  // ===== CAIXA =====
   async obterCaixaAtivo() {
     try {
       const response = await this.request('/caixa/aberto');
@@ -101,11 +97,9 @@ class VendaService {
     }
   }
 
-  // ===== FORMATAR DADOS DA VENDA =====
   async formatarDadosVenda(dadosVenda, user) {
     const caixaAtivo = await this.obterCaixaAtivo();
     
-    // Formatar itens conforme a API espera
     const itensFormatados = dadosVenda.itens.map(item => ({
       produtoId: item.id,
       quantidade: item.qtd

@@ -20,7 +20,7 @@ function AberturaCaixa({ user, onAberturaSuccess, onLogout }) {
             };
             
 
-            const response = await fetch('http://localhost:3333/api/caixa/abrir', {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/caixa/abrir`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
