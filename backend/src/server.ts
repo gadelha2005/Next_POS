@@ -2,11 +2,11 @@ import express from "express";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoute";
 import caixaRoutes from "./routes/caixaRoutes";
-import produtoRoutes from "./routes/produtoRoutes"
+import produtoRoutes from "./routes/produtoRoutes";
 import initDatabase from "./script/init-database";
-import clienteRoutes from './routes/clienteRoutes';
-import vendaRoutes from './routes/vendaRoutes';
-import configuracaoRoutes from './routes/configuracaoRoutes';
+import clienteRoutes from "./routes/clienteRoutes";
+import vendaRoutes from "./routes/vendaRoutes";
+import configuracaoRoutes from "./routes/configuracaoRoutes";
 import path from "path";
 import emailService from "./service/emailService";
 
@@ -14,43 +14,58 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = [
-  'http://localhost:5173',           // Local development
-  'http://localhost:3000',           // Caso rode em outra porta
-  'https://next-pos-frontend.vercel.app',  // Seu frontend em produção
-  'https://next-pos-frontend-vercel.app'   // Se tiver variações
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
+  : [
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://localhost:3333",
+      "https://next-pos-frontend.vercel.app",
+    ];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+
+  // Log para debug em desenvolvimento
+  if (process.env.NODE_ENV !== "production") {
+    console.log(
+      `[CORS] Origin: ${origin}, Allowed: ${allowedOrigins.includes(origin)}`
+    );
   }
-  
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  if (req.method === 'OPTIONS') {
+
+  // Sempre retornar CORS para requisições permitidas
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    );
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With"
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
+  }
+
+  if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
-  
+
   next();
 });
 
 app.use(express.json());
 
 // Arquivos Estáticos das Imagens
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // Rotas
 app.use("/api/auth", authRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/produtos", produtoRoutes);
-app.use('/api/clientes', clienteRoutes);
-app.use("/api/vendas" , vendaRoutes);
-app.use('/api/configuracoes', configuracaoRoutes);
+app.use("/api/clientes", clienteRoutes);
+app.use("/api/vendas", vendaRoutes);
+app.use("/api/configuracoes", configuracaoRoutes);
 
 // Rota de saúde
 app.get("/health", (req, res) => {
