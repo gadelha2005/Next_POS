@@ -26,26 +26,22 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  // Log para debug em desenvolvimento
-  if (process.env.NODE_ENV !== "production") {
-    console.log(
-      `[CORS] Origin: ${origin}, Allowed: ${allowedOrigins.includes(origin)}`
-    );
+  // Verificar se a origem é permitida
+  const isAllowed = allowedOrigins.includes(origin) || !origin;
+
+  if (isAllowed) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
   }
 
-  // Sempre retornar CORS para requisições permitidas
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-    );
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With"
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-  }
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
