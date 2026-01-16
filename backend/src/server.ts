@@ -95,20 +95,18 @@ app.use("*", (req, res) => {
 const PORT = process.env.PORT || 3333;
 
 app.listen(PORT, async () => {
-  console.log(`✓ Servidor rodando na porta ${PORT}`);
-  console.log(`✓ Health check: http://localhost:${PORT}/health`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 
   try {
     // Inicializar banco de dados
     await initDatabase();
-    console.log("✓ Banco de dados inicializado com sucesso");
+    console.log("Banco de dados inicializado");
 
     // Verificação do serviço de email
     await emailService.verifyConnection();
-    console.log("✓ Serviço de email verificado");
+    console.log("Serviço de email verificado");
   } catch (error) {
-    console.error("⚠ Erro durante inicialização:", error);
-    // Não para o servidor, apenas loga o erro
+    console.error("Erro durante inicialização:", error);
   }
 });
 
