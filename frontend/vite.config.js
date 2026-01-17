@@ -7,13 +7,26 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
-    host: true
+    host: true,
+    // Proxy para desenvolvimento local
+    proxy: {
+      '/api': {
+        target: 'https://next-pos-backend-three.vercel.app', // URL fixa
+        changeOrigin: true,
+        secure: true,
+      }
+    }
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['axios', 'jspdf']
+        }
+      }
+    }
   },
-  define: {
-    'process.env': {}
-  }
 })

@@ -21,6 +21,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       "http://localhost:3000",
       "http://localhost:3333",
       "https://next-pos-frontend.vercel.app",
+      "https://next-pos-frontend-*.vercel.app",      
+      "https://next-pos-frontend-git-*.vercel.app" 
     ];
 
 app.use((req, res, next) => {
