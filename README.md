@@ -2,6 +2,8 @@
 
 Um sistema completo de ponto de venda (POS) desenvolvido com tecnologias modernas, incluindo autenticação, gestão de produtos, clientes, vendas e relatórios.
 
+NextPOS: https://next-pos-frontend.vercel.app/
+
 ## 📋 Índice
 
 - [Tecnologias](#tecnologias)
